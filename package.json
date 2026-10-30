@@ -5,7 +5,7 @@
   "description": "CSV ingestion CLI and enrichment/analytics API for malicious activity logs",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": "^24 || >=26"
   },
   "scripts": {
     "api": "tsx src/api/main.ts",

@@ -25,7 +25,6 @@ describe("streamEventSchema", () => {
     { type: "started", runId: "r1", total: 2 },
     { type: "heartbeat" },
     { type: "rejected", line: 2, reason: "invalid ip" },
-    { type: "duplicate_skipped", line: 2 },
     { type: "id_conflict", line: 2 },
     { type: "enriched", line: 2 },
     { type: "enrichment_failed", line: 2, reason: "upstream unavailable" },
@@ -36,7 +35,6 @@ describe("streamEventSchema", () => {
       summary: {
         received: 2,
         rejected: 0,
-        duplicatesSkipped: 0,
         idConflicts: 0,
         enrichmentFailed: 0,
         sent: 2,

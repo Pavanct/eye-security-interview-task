@@ -23,7 +23,6 @@ export type IngestRequest = z.infer<typeof ingestRequestSchema>;
 export const runSummarySchema = z.object({
   received: z.int().nonnegative(),
   rejected: z.int().nonnegative(),
-  duplicatesSkipped: z.int().nonnegative(),
   idConflicts: z.int().nonnegative(),
   enrichmentFailed: z.int().nonnegative(),
   sent: z.int().nonnegative(),
@@ -42,7 +41,8 @@ export const streamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("started"), runId: z.string(), total: z.int().nonnegative() }),
   z.object({ type: z.literal("heartbeat") }),
   z.object({ type: z.literal("rejected"), line: z.int().positive(), reason: reasonSchema }),
-  z.object({ type: z.literal("duplicate_skipped"), line: z.int().positive() }),
+  // A repeated id is flagged but still sent. The API doesn't see every CSV column, so
+  // it can't prove two rows are the same event, and dropping evidence is the worse error.
   z.object({ type: z.literal("id_conflict"), line: z.int().positive() }),
   z.object({ type: z.literal("enriched"), line: z.int().positive() }),
   z.object({ type: z.literal("enrichment_failed"), line: z.int().positive(), reason: reasonSchema }),

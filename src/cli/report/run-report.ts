@@ -49,21 +49,21 @@ export class RunReport {
         if (event.ingested !== event.lines.length) {
           // The response doesn't say which were stored, so all of them need checking.
           const reason = `only ${event.ingested} of ${event.lines.length} in this batch were stored, unknown which`;
-          event.lines.forEach((line) => this.fail(line, reason));
+          this.failAll(event.lines, reason);
           this.print(`Warning: ${reason}`);
         } else if (event.possibleDuplicates) {
           this.tally.possibleDuplicates += event.lines.length;
           const reason = "stored, but possibly twice: an earlier attempt had an unclear result";
-          event.lines.forEach((line) => this.fail(line, reason));
+          this.failAll(event.lines, reason);
           this.print(`Warning: a batch of ${event.lines.length} was ${reason}`);
         } else {
-          event.lines.forEach((line) => this.settled.add(line));
+          for (const line of event.lines) this.settled.add(line);
         }
         this.print(`Stored ${this.tally.ingested} of ${this.expectedToStore} rows`);
         break;
       case "batch_failed":
         this.tally.analyticsFailed += event.lines.length;
-        event.lines.forEach((line) => this.fail(line, event.reason));
+        this.failAll(event.lines, event.reason);
         this.print(`A batch of ${event.lines.length} failed: ${event.reason}`);
         break;
       case "summary":
@@ -80,6 +80,10 @@ export class RunReport {
   private get expectedToStore(): number {
     const { received, rejected, enrichmentFailed, analyticsFailed } = this.tally;
     return received - rejected - enrichmentFailed - analyticsFailed;
+  }
+
+  private failAll(lines: number[], reason: string): void {
+    for (const line of lines) this.fail(line, reason);
   }
 
   private fail(line: number, reason: string): void {

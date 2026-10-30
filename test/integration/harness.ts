@@ -108,7 +108,7 @@ function fakeUpstream(behaviour: Behaviour, controls: Controls) {
 
     if (req.url === "/enrichment") {
       const body = await readJson<LogLineBody>(req);
-      Object.keys(body).forEach((key) => state.bodyKeys.add(key));
+      for (const key of Object.keys(body)) state.bodyKeys.add(key);
       state.enrichmentCalls.push(body);
       const attempt = (attempts.get(body.id) ?? 0) + 1;
       attempts.set(body.id, attempt);

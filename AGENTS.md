@@ -9,6 +9,7 @@ nvm use
 pnpm install --frozen-lockfile
 pnpm test        # unit and integration tests
 pnpm typecheck
+pnpm lint        # Biome: lint and format check. `pnpm format` applies fixes
 pnpm api         # needs UPSTREAM_API_KEY in .env
 pnpm -s cli ingest <file>
 ```

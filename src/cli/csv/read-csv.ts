@@ -58,9 +58,9 @@ export function parseCsv(text: string): CsvFile {
       continue;
     }
     const row = { line: info.lines } as CsvRow;
-    CSV_COLUMNS.forEach((column, index) => {
-      row[column] = record[positions[index]!] ?? "";
-    });
+    for (const column of CSV_COLUMNS) {
+      row[column] = record[header.indexOf(column)] ?? "";
+    }
     rows.push(row);
   }
 

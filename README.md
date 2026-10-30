@@ -95,7 +95,7 @@ The full list is in [ADR-4](docs/decisions.md#adr-4-retry-transient-failures-and
 
 ## Testing
 
-Run `pnpm test` and `pnpm typecheck`. Unit tests sit next to the code. Integration tests run the real CLI and API over HTTP, with only the two external services faked, copying what the real service was seen to do. I also ran the full sample against the real service and followed this README from a fresh clone.
+Run `pnpm test`, `pnpm typecheck` and `pnpm lint`. Unit tests sit next to the code. Integration tests run the real CLI and API over HTTP, with only the two external services faked, copying what the real service was seen to do. I also ran the full sample against the real service and followed this README from a fresh clone.
 
 I used AI assistance for much of the code and for the code review. I made the decisions, reviewed the code, and tested it against the real service.
 

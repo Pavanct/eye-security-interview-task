@@ -76,17 +76,18 @@ export async function runPipeline(
     // Only checked between groups, so a batch that has started is never abandoned halfway.
     if (shutdown.aborted) return stopRun("server is shutting down");
 
-    const results = await Promise.all(group.map((item) => enricher.enrich(item.logLine, signal)));
+    const results = await Promise.all(
+      group.map(async ({ line, logLine }) => ({ line, logLine, result: await enricher.enrich(logLine, signal) })),
+    );
     if (signal.aborted) break;
 
-    for (const result of results) {
+    for (const { result } of results) {
       if (!result.ok && result.fatal) return stopRun(result.reason);
     }
 
     const events: AnalyticsEvent[] = [];
     const lines: number[] = [];
-    results.forEach((result, index) => {
-      const { line, logLine } = group[index]!;
+    for (const { line, logLine, result } of results) {
       if (result.ok) {
         emit({ type: "enriched", line });
         // The enrichment category replaces ours: analytics wants the MITRE handle.
@@ -97,7 +98,7 @@ export async function runPipeline(
         logger.warn({ line, reason: result.reason, attempts: result.attempts }, "enrichment failed");
         emit({ type: "enrichment_failed", line, reason: result.reason });
       }
-    });
+    }
 
     if (events.length === 0) continue;
 

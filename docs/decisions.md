@@ -67,7 +67,7 @@ The sources disagree. The task says the Analytics Service is "rate limited at 20
 ### Decision drivers
 
 - Going over the limit causes 429s and wasted retries.
-- The two statements can't be told apart without testing the real service.
+- Staying within both statements means we don't have to guess which is right.
 
 ### Considered options
 
@@ -77,6 +77,10 @@ The sources disagree. The task says the Analytics Service is "rate limited at 20
 ### Decision
 
 We chose **option 1**, because it satisfies both sources. Batch size and interval are configuration. A 429 is still handled, because the limiter can't see other clients using the same key.
+
+Trying the real service confirmed this reading. A second request right after the first got a 429, and so did one sent 3 seconds after a 20-item batch. A 21-item batch got a 400. The 429 has a `Retry-After: 10` header and an HTML body, neither of which is in the spec, so the client doesn't assume a 429 body is JSON and it honours the header.
+
+The default interval is 10.5 seconds, not 10, so network jitter can't land a request just inside the previous window.
 
 ### Consequences
 
@@ -158,15 +162,21 @@ The Enrichment Service has "intermittent issues", possibly unresolved. Analytics
 
 ### Decision
 
-We chose **option 3**, with these defaults, all configurable: 3 attempts, backoff starting at 200 ms and doubling, with jitter, capped at 5 seconds. Timeouts are 5 seconds for enrichment and 10 seconds for analytics. Enrichment concurrency is 5.
+We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 attempts, with backoff starting at 200 ms and doubling, with full jitter, capped at 5 seconds. Analytics gets 3 attempts, paced by the rate limiter instead of a backoff. Timeouts are 5 seconds for enrichment and 10 seconds for analytics. Enrichment concurrency is 5.
+
+**Changed during implementation:** the plan was 3 enrichment attempts. In a small test against the real service, 7 of 30 calls returned a 500 (about 23%). At that rate 3 attempts would lose about 1% of records, and 5 attempts less than 0.1%. It's a small sample, so the number is configurable.
 
 | Failure | Behaviour |
 |---|---|
-| Enrichment fails after retries | Record marked failed, the rest continue, and it is never sent unenriched |
-| Analytics 429 | Wait and retry |
-| Analytics 5xx or network error | Limited retries, then the batch is marked failed |
+| Enrichment 5xx, 429, timeout, network error or invalid 200 body | Retry. After the last attempt the record is marked failed, the rest continue, and it is never sent unenriched |
+| Enrichment 400 | No retry, the record is marked failed |
+| 401 or 403 from either service (not in the spec, but the real service returns 401) | No retry, since the key won't get better by trying again |
+| Analytics 429 | Wait for `Retry-After`, then retry through the limiter |
+| Analytics 5xx, timeout or network error | Retry through the limiter, then the batch is marked failed |
 | Analytics 400 | No retry, the batch is marked failed |
-| Analytics 200 with partial `itemsIngested` | Reported as a mismatch |
+| Analytics 200 with `status: "error"` and nothing stored | Retry, since nothing can be duplicated |
+| Analytics 200 with partial `itemsIngested` | No retry, since it would duplicate items. Reported as a mismatch |
+| Analytics 200 with an invalid body | No retry, since the batch may be stored. The batch is marked failed |
 
 ### Consequences
 

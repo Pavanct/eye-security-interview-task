@@ -101,7 +101,7 @@ The default interval is 10.5 seconds, not 10, so network jitter can't land a req
 
 ### Context
 
-The sample is dirty: about 20 spellings of 10 categories, a row with a missing column (line 106), an invalid IP (line 436), an empty category (line 675) and 3 repeated ids. The task doesn't say how to handle any of this. The data feeds incident response, so both losing records and mislabelling them are costly.
+The sample is dirty: about 20 spellings of 10 categories, a row with a missing column (line 105), an invalid IP (line 436), an empty category (line 675) and 3 repeated ids. The task doesn't say how to handle any of this. The data feeds incident response, so both losing records and mislabelling them are costly.
 
 ### Decision drivers
 

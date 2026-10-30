@@ -95,7 +95,7 @@ The full list is in [ADR-4](docs/decisions.md#adr-4-retry-transient-failures-and
 
 ## Testing
 
-Run `pnpm test`, `pnpm typecheck` and `pnpm lint`. Unit tests sit next to the code. Integration tests run the real CLI and API over HTTP, with only the two external services faked, copying what the real service was seen to do. I also ran the full sample against the real service and followed this README from a fresh clone.
+Run `pnpm test`, `pnpm typecheck` and `pnpm lint`. Unit tests sit next to the code. Integration tests run the real CLI and API over HTTP, with only the two external services faked, copying what the real service was seen to do. I also ran the full sample against the real service and followed this README from a fresh clone. I ran [Fallow](https://github.com/fallow-rs/fallow) on demand for dead code, duplication and complexity, which led to removing unused exports and splitting up `runPipeline`.
 
 As a last check, I generated about 50 awkward CSVs and sent bad requests straight to the API, all against a fake upstream: formula and SQL injection, escape codes, log-forging newlines, binary and UTF-16 files, oversized fields, and files right at the size limit. The API held up, and the accounting was right in every run. The CLI wasn't as solid, and this is what I fixed:
 

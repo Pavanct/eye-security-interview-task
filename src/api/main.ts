@@ -1,11 +1,7 @@
 import { serve } from "@hono/node-server";
 import { pino } from "pino";
-import { createApp } from "./app.js";
 import { loadConfig, type Config } from "./config.js";
-import { IntervalRateLimiter } from "./lib/rate-limiter.js";
-import { sleep } from "./lib/timing.js";
-import { HttpAnalyticsSink } from "./upstream/analytics-client.js";
-import { HttpEnricher } from "./upstream/enrichment-client.js";
+import { createService } from "./service.js";
 
 let config: Config;
 try {
@@ -16,24 +12,8 @@ try {
 }
 
 const logger = pino({ level: config.logLevel });
-
-const http = { ...config.upstream, fetch: globalThis.fetch };
-const retryDeps = { sleep, random: Math.random };
-// One limiter for the whole process: concurrent runs share the same upstream budget.
-const limiter = new IntervalRateLimiter(config.analytics.intervalMs, Date.now, sleep);
 const shutdown = new AbortController();
-
-const app = createApp({
-  pipeline: {
-    enricher: new HttpEnricher(http, config.enrichment.timeoutMs, config.enrichment.retry, retryDeps),
-    sink: new HttpAnalyticsSink(http, limiter, config.analytics.timeoutMs, config.analytics.maxAttempts, retryDeps),
-    batchSize: config.analytics.batchSize,
-    shutdown: shutdown.signal,
-  },
-  maxRecordsPerRequest: config.maxRecordsPerRequest,
-  heartbeatIntervalMs: config.heartbeatIntervalMs,
-  logger,
-});
+const app = createService(config, shutdown.signal, logger);
 
 const server = serve({ fetch: app.fetch, port: config.port }, ({ port }) => {
   logger.info({ port }, "api listening");

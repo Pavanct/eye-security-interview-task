@@ -83,7 +83,7 @@ Trying the real service confirmed this reading. A second request right after the
 
 The default interval is 10.5 seconds, not 10, so network jitter can't land a request just inside the previous window.
 
-A full run of the sample against the real service took about 8.9 minutes and stored all 996 valid records. 2 of the 50 batches needed a second attempt. The logs at that point didn't record why, so retries now log their reason.
+Two full runs of the sample against the real service took about 9 minutes each and stored all 996 valid records. In the first, 2 of the 50 batches needed a second attempt, and the logs didn't record why, so retries now log their reason. In the second, 3 batches got a 429, exactly 210 seconds apart, which is every 20 batches at this interval. That suggests the service uses fixed time slots that a 10.5 second interval drifts across, though this isn't proven. Each one costs about 10 seconds and loses nothing, so the interval stays as it is. No run reported a possible duplicate.
 
 ### Consequences
 

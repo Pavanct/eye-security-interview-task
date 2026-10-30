@@ -54,7 +54,7 @@ A few things I planned didn't survive building it or testing the real service:
 - **I dropped generated types.** The spec has no `required` lists, so they'd accept an event with no `asn`, and the generator doesn't work with TypeScript 7. The schemas are hand-written, with a contract test against the spec.
 - **A bad API key now stops the run.** At first every record failed with its own 401, which was correct but useless.
 - **Possible duplicates are now reported.** A code review pointed out that a retry after a timeout could store a batch twice while the run still exited 0. I still retry, because a lost event is worse, but those rows are flagged and the exit code is 1.
-- **Retries now log why they happened.** In the real run, 2 of 50 batches took a second attempt, and the logs couldn't tell me whether it was a harmless 429 or a timeout that might have stored them twice.
+- **Retries now log why they happened.** In the first real run, 2 of 50 batches took a second attempt, and the logs couldn't tell me whether it was a harmless 429 or a timeout that might have stored them twice. With the reason logged, the next run showed 429s, exactly 210 s apart, which is every 20 batches at my 10.5 s interval. They cost about 10 s each and lose nothing. I suspect the service uses fixed time slots that my interval drifts across, but I haven't proved it.
 
 ## How it works
 
@@ -125,4 +125,5 @@ Our own API's auth is out of scope, but as it stands anyone who can reach `/inge
 - **Overlapping runs add up.** Each can make 20 enrichment calls at once, and they share the analytics budget.
 - **Files over 5,000 rows are refused,** not split.
 - **`main.ts` has no automated test.** I checked its signal handling by hand.
+- **No CI.** Lint, type check and tests only run locally. A small GitHub Actions workflow is the obvious next step.
 - **No `/health` endpoint,** because the brief asks for one endpoint, though production would want one.

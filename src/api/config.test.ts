@@ -12,6 +12,7 @@ describe("loadConfig", () => {
     expect(config.enrichment.retry.maxAttempts).toBe(5);
     expect(config.analytics).toEqual({ batchSize: 20, intervalMs: 10_500, timeoutMs: 10_000, maxAttempts: 3 });
     expect(config.maxRecordsPerRequest).toBe(5000);
+    expect(config.shutdownGraceMs).toBe(30_000);
   });
 
   it("reads overrides from strings", () => {

@@ -12,6 +12,8 @@ const sink: AnalyticsSink = {
   send: async (events) => ({ ok: true, value: { status: "ok", itemsIngested: events.length }, attempts: 1 }),
 };
 
+const shutdown = new AbortController().signal;
+
 const record = (line: number): RawRecord => ({
   line,
   id: String(line),
@@ -22,7 +24,7 @@ const record = (line: number): RawRecord => ({
 
 function app(overrides: Partial<AppDeps> = {}) {
   return createApp({
-    pipeline: { enricher, sink, batchSize: 20 },
+    pipeline: { enricher, sink, batchSize: 20, shutdown },
     maxRecordsPerRequest: 10,
     heartbeatIntervalMs: 60_000,
     logger: pino({ level: "silent" }),
@@ -105,7 +107,7 @@ describe("POST /ingest", () => {
       };
 
       const response = await app({
-        pipeline: { enricher, sink: slowSink, batchSize: 20 },
+        pipeline: { enricher, sink: slowSink, batchSize: 20, shutdown },
         heartbeatIntervalMs: 10,
       }).request(post(JSON.stringify({ records: [record(2)] })));
 
@@ -124,7 +126,7 @@ describe("POST /ingest", () => {
       };
 
       const response = await app({
-        pipeline: { enricher: crashing, sink, batchSize: 20 },
+        pipeline: { enricher: crashing, sink, batchSize: 20, shutdown },
       }).request(post(JSON.stringify({ records: [record(2)] })));
 
       const events = await readEvents(response);
@@ -151,7 +153,7 @@ describe("POST /ingest", () => {
           }),
       };
       const server = serve({
-        fetch: app({ pipeline: { enricher, sink: blockingSink, batchSize: 20 } }).fetch,
+        fetch: app({ pipeline: { enricher, sink: blockingSink, batchSize: 20, shutdown } }).fetch,
         port: 0,
       });
       await new Promise((resolve) => server.once("listening", resolve));

@@ -12,6 +12,8 @@ const envSchema = z.object({
 
   MAX_RECORDS_PER_REQUEST: positiveInt(5000),
   HEARTBEAT_INTERVAL_MS: positiveInt(5000),
+  // Long enough for a batch waiting on the rate limiter (about 10 s) to go out and be answered.
+  SHUTDOWN_GRACE_MS: positiveInt(30_000),
 
   ENRICHMENT_TIMEOUT_MS: positiveInt(5000),
   // Probing the real service showed about 23% of calls return a 500, so 3 attempts would
@@ -34,6 +36,7 @@ export interface Config {
   logLevel: "debug" | "info" | "warn" | "error" | "silent";
   maxRecordsPerRequest: number;
   heartbeatIntervalMs: number;
+  shutdownGraceMs: number;
   upstream: { baseUrl: string; apiKey: string };
   enrichment: {
     timeoutMs: number;
@@ -57,6 +60,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     logLevel: e.LOG_LEVEL,
     maxRecordsPerRequest: e.MAX_RECORDS_PER_REQUEST,
     heartbeatIntervalMs: e.HEARTBEAT_INTERVAL_MS,
+    shutdownGraceMs: e.SHUTDOWN_GRACE_MS,
     upstream: { baseUrl: e.UPSTREAM_BASE_URL, apiKey: e.UPSTREAM_API_KEY },
     enrichment: {
       timeoutMs: e.ENRICHMENT_TIMEOUT_MS,

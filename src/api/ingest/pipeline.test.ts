@@ -31,12 +31,17 @@ function recordingSink(): AnalyticsSink & { batches: AnalyticsEvent[][] } {
 
 async function run(
   input: RawRecord[],
-  { enricher = enrichOk, sink = recordingSink() as AnalyticsSink, signal = new AbortController().signal } = {},
+  {
+    enricher = enrichOk,
+    sink = recordingSink() as AnalyticsSink,
+    signal = new AbortController().signal,
+    shutdown = new AbortController().signal,
+  } = {},
 ) {
   const events: StreamEvent[] = [];
   const summary = await runPipeline(
     input,
-    { enricher, sink, batchSize: 20, logger: pino({ level: "silent" }) },
+    { enricher, sink, batchSize: 20, shutdown, logger: pino({ level: "silent" }) },
     (event) => events.push(event),
     signal,
   );
@@ -263,6 +268,36 @@ describe("given the API key is rejected", () => {
     expect(summary).toBeUndefined();
     expect(ofType("batch_failed")).toEqual([]);
     expect(events.at(-1)).toEqual({ type: "run_failed", reason: "analytics rejected the API key" });
+  });
+});
+
+describe("given the server starts shutting down", () => {
+  it("when a batch is in progress, then it completes and the run stops before the next one", async () => {
+    const controller = new AbortController();
+    const send = vi.fn<AnalyticsSink["send"]>(async (events) => {
+      controller.abort();
+      return { ok: true, value: { status: "ok", itemsIngested: events.length }, attempts: 1 };
+    });
+
+    const { summary, events, ofType } = await run(records(60), { sink: { send }, shutdown: controller.signal });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(ofType("batch_sent")).toHaveLength(1);
+    expect(summary).toBeUndefined();
+    expect(events.at(-1)).toEqual({ type: "run_failed", reason: "server is shutting down" });
+  });
+
+  it("when the last batch is in progress, then the run still finishes normally", async () => {
+    const controller = new AbortController();
+    const send = vi.fn<AnalyticsSink["send"]>(async (events) => {
+      controller.abort();
+      return { ok: true, value: { status: "ok", itemsIngested: events.length }, attempts: 1 };
+    });
+
+    const { summary, events } = await run(records(20), { sink: { send }, shutdown: controller.signal });
+
+    expect(summary).toMatchObject({ sent: 20 });
+    expect(events.at(-1)?.type).toBe("summary");
   });
 });
 

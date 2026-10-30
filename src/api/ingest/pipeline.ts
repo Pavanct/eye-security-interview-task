@@ -18,6 +18,9 @@ export interface PipelineDeps {
   enricher: Enricher;
   sink: AnalyticsSink;
   batchSize: number;
+  // Fires when the server is shutting down. Separate from a run's own abort signal: the
+  // client is still connected, so the run can finish its batch and say why it stopped.
+  shutdown: AbortSignal;
   logger: Logger;
 }
 
@@ -45,7 +48,7 @@ export async function runPipeline(
   emit: (event: StreamEvent) => void,
   signal: AbortSignal,
 ): Promise<RunSummary | undefined> {
-  const { enricher, sink, batchSize, logger } = deps;
+  const { enricher, sink, batchSize, shutdown, logger } = deps;
   const summary: RunSummary = {
     received: records.length,
     rejected: 0,
@@ -66,6 +69,8 @@ export async function runPipeline(
 
   for (const group of chunk(valid, batchSize)) {
     if (signal.aborted) break;
+    // Only checked between groups, so a batch that has started is never abandoned halfway.
+    if (shutdown.aborted) return stopRun("server is shutting down");
 
     const results = await Promise.all(group.map((item) => enricher.enrich(item.logLine, signal)));
     if (signal.aborted) break;

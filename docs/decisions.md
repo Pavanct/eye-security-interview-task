@@ -48,6 +48,7 @@ The stream must end with a `summary` event. A stream that ends without one is re
 - **Easier:** no job store or polling; the API owns the whole pipeline and the CLI stays thin.
 - **Harder:** a run can't be resumed or reattached after a dropped connection.
 - **Accepted risk:** on client disconnect the server stops processing, so an interrupted run is partially ingested. The events received so far show how far it got.
+- **Shutdown:** on SIGTERM or SIGINT the server stops taking requests, and each run finishes its current batch and ends with a `run_failed` event, so the CLI can say why it stopped. After a grace period (30 seconds by default) it exits regardless. The rest of the run isn't resumed, so a deployment still interrupts long runs.
 
 ### Follow-ups
 

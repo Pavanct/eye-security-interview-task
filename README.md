@@ -72,7 +72,7 @@ Events stream back throughout. The stream ends with `summary` if the run finishe
 
 ## The sample data
 
-It's dirty on purpose: about 20 spellings of 10 categories, a missing column on line 105, `N` as an IP on line 436, an empty category on line 675, and 3 repeated ids. Spellings are fixed by cleanup and the alias table. The bad rows are reported with reasons in the rejects file, which can be fixed and used as input. The repeated ids are sent and flagged, because they're different events.
+It's dirty on purpose: about 20 spellings of 10 categories, a missing column on line 105, `N` as an IP on line 436, an empty category on line 675, and 3 repeated ids. Spellings are fixed by cleanup and the alias table. The bad rows are reported with reasons in the rejects file, which can be fixed and used as input. Runs append to that file, so a rerun can't wipe out what an earlier run reported, though a row rejected twice is listed twice. The repeated ids are sent and flagged, because they're different events.
 
 ## Performance
 
@@ -97,6 +97,16 @@ The full list is in [ADR-4](docs/decisions.md#adr-4-retry-transient-failures-and
 
 Run `pnpm test`, `pnpm typecheck` and `pnpm lint`. Unit tests sit next to the code. Integration tests run the real CLI and API over HTTP, with only the two external services faked, copying what the real service was seen to do. I also ran the full sample against the real service and followed this README from a fresh clone.
 
+As a last check, I generated about 50 awkward CSVs and sent bad requests straight to the API, all against a fake upstream: formula and SQL injection, escape codes, log-forging newlines, binary and UTF-16 files, oversized fields, and files right at the size limit. The API held up, and the accounting was right in every run. The CLI wasn't as solid, and this is what I fixed:
+
+- **`--rejects` pointing at the input file overwrote the input.** It's now refused. For forensic data, that was the worst one.
+- **An unwritable rejects path crashed after the rows were stored,** losing the list of rows needing attention. The path is now checked before anything is sent, and if writing still fails, the rows are printed.
+- **A refused request said rows "may already be stored",** when nothing had been sent. It now says they're safe to resend.
+- **`--category a --category b` silently used only the last one,** while `--source` allowed several. Now they all work the same way.
+- **Smaller fixes:** `007` and `7` were treated as the same id, so leading zeros are now rejected. Escape codes no longer reach the rejects file as raw bytes. Multi-line rows report the line they start on, headers ignore case and spaces, a repeated column is refused, and `--api-url` refuses a path it would have ignored. The API now requires a JSON content type.
+
+These were one-off checks, and a few representative cases are now in the test suite.
+
 I used AI assistance for much of the code and for the code review. I made the decisions, reviewed the code, and tested it against the real service.
 
 ## Observability
@@ -116,6 +126,7 @@ Our own API's auth is out of scope, but as it stands anyone who can reach `/inge
 - `exploit public facing` means `exploitpublicfacingapplication`. Each alias is my guess at what SecOps meant, so I'd want them to check the table.
 - `created_utc` is UTC and day-first.
 - A repeated id is a separate event, not a duplicate to drop.
+- Ids have no leading zeros, and fullwidth letters in a category count as the normal letters.
 
 ## Known gaps and what I'd do next
 
@@ -124,6 +135,7 @@ Our own API's auth is out of scope, but as it stands anyone who can reach `/inge
 - **No circuit breaker.** During a long enrichment outage, every record still uses all its attempts.
 - **Overlapping runs add up.** Each can make 20 enrichment calls at once, and they share the analytics budget.
 - **Files over 5,000 rows are refused,** not split.
+- **A quote that never closes refuses the whole file.** Nothing gets swallowed silently, but one bad row blocks the rest until it's fixed.
 - **`main.ts` has no automated test.** I checked its signal handling by hand.
 - **No CI.** Lint, type check and tests only run locally. A small GitHub Actions workflow is the obvious next step.
 - **No `/health` endpoint,** because the brief asks for one endpoint, though production would want one.

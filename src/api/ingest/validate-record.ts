@@ -7,8 +7,9 @@ export type ValidatedRecord =
   | { ok: false; line: number; reason: string };
 
 // Numbers beyond MAX_SAFE_INTEGER (16 digits) would silently lose precision in
-// JavaScript, so the int64 id from the spec is limited to the safe range here.
-const ID_PATTERN = /^\d{1,16}$/;
+// JavaScript, so the int64 id from the spec is limited to the safe range here. Leading
+// zeros are refused too: 007 would be stored as 7, changing the id without anyone knowing.
+const ID_PATTERN = /^(0|[1-9]\d{0,15})$/;
 
 // The API's trust boundary: raw client input goes in, and either a typed LogLine or
 // a fixed reason string comes out. Reasons never contain the input value.

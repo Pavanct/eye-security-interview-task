@@ -12,13 +12,22 @@ function neutralise(cell: string): string {
   return /^[=+\-@\t\r]/.test(cell) ? `'${cell}` : cell;
 }
 
+// Escape codes in a hostile value could act on the terminal of whoever views this file.
+// They're shown as text, so the evidence stays readable. Tabs and line breaks are kept.
+function showControlCharacters(cell: string): string {
+  return cell.replace(/\p{Cc}/gu, (char) =>
+    /[\t\r\n]/.test(char) ? char : `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`,
+  );
+}
+
 function encode(cell: string): string {
-  const safe = neutralise(cell);
+  const safe = neutralise(showControlCharacters(cell));
   return /[;"\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
-export function formatRejects(rows: RejectedRow[]): string {
-  const lines = [[...CSV_COLUMNS, "line", "reason"].join(";")];
+// The header is optional because rows can be appended to a file that already has one.
+export function formatRejects(rows: RejectedRow[], { header = true } = {}): string {
+  const lines = header ? [[...CSV_COLUMNS, "line", "reason"].join(";")] : [];
   for (const { fields, line, reason } of rows) {
     lines.push([...fields, String(line), reason].map(encode).join(";"));
   }

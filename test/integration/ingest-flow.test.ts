@@ -52,7 +52,7 @@ describe("given the sample file and healthy services", () => {
   it("when filtered, then only the matching rows reach the services", async () => {
     const { upstream, output } = await runFlow({
       csv: sample,
-      filter: { source: ["defender"], category: "phishing", from: "01/03/2024", to: "2024-03-31" },
+      filter: { source: ["defender"], category: ["phishing"], from: "01/03/2024", to: "2024-03-31" },
     });
 
     expect(upstream.stored).toHaveLength(7);
@@ -182,6 +182,30 @@ describe("given the API goes away mid-run", () => {
     expect(upstream.stored).toHaveLength(20);
     expect(output).toContain("server is shutting down");
     expect(rejectLines(rejects)).toHaveLength(40);
+    expect(exitCode).toBe(1);
+  });
+});
+
+describe("given a file of hostile values", () => {
+  it("when ingested, then none reach the services and every row is reported", async () => {
+    const hostile = [
+      `=cmd|' /C calc'!A0;server_a;1.2.3.4;x;y;phishing`,
+      `2;<script>alert(1)</script>;1.2.3.4;x;y;phishing`,
+      `3;server_a;1.2.3.4'--;x;y;phishing`,
+      `4;server_a;1.2.3.4;x;y;\u001b[31mred`,
+      `5;server_a;1.2.3.4;x;y;__proto__`,
+      `6;"server\n{""level"":60}";1.2.3.4;x;y;phishing`,
+      `007;server_a;1.2.3.4;x;y;phishing`,
+    ];
+
+    const { exitCode, output, rejects, upstream } = await runFlow({ csv: csv(hostile) });
+
+    expect(upstream.enrichmentCalls).toEqual([]);
+    expect(upstream.analyticsCalls).toBe(0);
+    expect(output).toMatch(/Rejected by the API:\s+7/);
+    expect(output).not.toContain("\u001b");
+    expect(rejects).not.toContain("\u001b");
+    expect(rejects).toContain("'=cmd");
     expect(exitCode).toBe(1);
   });
 });

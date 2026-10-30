@@ -26,6 +26,10 @@ export function createApp({ pipeline, maxRecordsPerRequest, heartbeatIntervalMs,
       onError: (c) => c.json({ error: "request body too large" }, 413),
     }),
     async (c) => {
+      if (!c.req.header("content-type")?.toLowerCase().startsWith("application/json")) {
+        return c.json({ error: "content type must be application/json" }, 415);
+      }
+
       const body = await c.req.json().catch(() => undefined);
       const parsed = ingestRequestSchema.safeParse(body);
       if (!parsed.success) return c.json({ error: "invalid request body" }, 400);

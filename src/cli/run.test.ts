@@ -41,7 +41,7 @@ async function run(lines: string[], fetchFn: typeof fetch, filter = {}) {
   const output: string[] = [];
 
   const exitCode = await runIngest(
-    { file, apiUrl: "http://api.test", rejectsPath, filter: { source: [], asset: [], ...filter } },
+    { file, apiUrl: "http://api.test", rejectsPath, filter: { source: [], asset: [], category: [], ...filter } },
     {
       fetch: fetchFn,
       signal: new AbortController().signal,
@@ -109,7 +109,7 @@ describe("given a filter", () => {
   it("when a row's category can't be checked, then it goes to the rejects file", async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => ndjson(summary({ received: 1, sent: 1, ingested: 1 })));
 
-    const { exitCode, rejects } = await run([row(1), row(2, "defender", "")], fetchFn, { category: "phishing" });
+    const { exitCode, rejects } = await run([row(1), row(2, "defender", "")], fetchFn, { category: ["phishing"] });
 
     expect(sentRecords(fetchFn).map((r) => r.id)).toEqual(["1"]);
     expect(rejects).toContain("empty category");
@@ -169,6 +169,21 @@ describe("given rows with problems", () => {
   });
 });
 
+describe("given a rejects file from an earlier run", () => {
+  it("when the next run has rejects too, then they are added and the earlier ones are kept", async () => {
+    const fetchFn = async () => ndjson(summary({ received: 1, sent: 1, ingested: 1 }));
+
+    await run([row(1), "2;a;b;c;d"], fetchFn);
+    const { rejects } = await run([row(1), "3;a;b;c;d"], fetchFn);
+
+    const lines = rejects?.trim().split("\r\n") ?? [];
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/^id;asset_name/);
+    expect(lines[1]).toMatch(/^2;a;/);
+    expect(lines[2]).toMatch(/^3;a;/);
+  });
+});
+
 describe("given a batch may have been stored twice", () => {
   it("when the run finishes, then its rows are flagged and it doesn't exit 0", async () => {
     const { exitCode, rejects, output } = await run([row(1), row(2)], async () =>
@@ -215,17 +230,76 @@ describe("given the run doesn't finish", () => {
 
     expect(exitCode).toBe(EXIT_INCOMPLETE);
     expect(output).toContain("Could not reach the API");
-    expect(rejects).toContain("2;run did not finish");
+    expect(rejects).toContain("2;not sent: the API did not take the request");
+    expect(rejects).not.toContain("may already be stored");
   });
 
-  it("when the API refuses the request, then its message is shown", async () => {
-    const { exitCode, output } = await run(
+  it("when the API refuses the request, then its message is shown and the rows are safe to resend", async () => {
+    const { exitCode, output, rejects } = await run(
       [row(1)],
       async () => new Response(JSON.stringify({ error: "too many records" }), { status: 413 }),
     );
 
     expect(exitCode).toBe(EXIT_INCOMPLETE);
     expect(output).toContain("too many records");
+    expect(rejects).toContain("2;not sent: the API did not take the request");
+    expect(rejects).not.toContain("may already be stored");
+  });
+});
+
+describe("given a problem with the rejects path", () => {
+  const options = (rejectsPath: string) => ({
+    file: join(dir, "input.csv"),
+    apiUrl: "http://api.test",
+    rejectsPath,
+    filter: { source: [], asset: [], category: [] },
+  });
+
+  async function runWith(rejectsPath: string, fetchFn: typeof fetch) {
+    const input = `${[HEADER, row(1), "2;a;b;c;d"].join("\r\n")}\r\n`;
+    await writeFile(join(dir, "input.csv"), input);
+    const output: string[] = [];
+    const exitCode = await runIngest(options(rejectsPath), {
+      fetch: fetchFn,
+      signal: new AbortController().signal,
+      idleTimeoutMs: 1000,
+      print: (message) => output.push(message),
+    });
+    return { exitCode, output: output.join("\n"), input };
+  }
+
+  it("when it is the input file, then nothing is sent and the input is untouched", async () => {
+    const fetchFn = vi.fn<typeof fetch>();
+    const before = `${[HEADER, row(1)].join("\r\n")}\r\n`;
+    await writeFile(join(dir, "input.csv"), before);
+
+    // A different spelling of the same path must not get past the check.
+    const samePath = join(dir, ".", "sub", "..", "input.csv");
+    const deps = { fetch: fetchFn, signal: new AbortController().signal, idleTimeoutMs: 1000, print: () => {} };
+
+    await expect(runIngest(options(samePath), deps)).rejects.toThrow("must not be the input file");
+
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(await readFile(join(dir, "input.csv"), "utf8")).toBe(before);
+  });
+
+  it("when its folder doesn't exist, then nothing is sent", async () => {
+    const fetchFn = vi.fn<typeof fetch>();
+
+    await expect(runWith(join(dir, "missing", "r.csv"), fetchFn)).rejects.toThrow("Can't write the rejects file");
+
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("when writing fails after the run, then the rows are still listed", async () => {
+    // The path passes the check at the start, but a folder can't be written as a file.
+    const { exitCode, output } = await runWith(dir, async () =>
+      ndjson({ type: "batch_sent", lines: [2], ingested: 1 }, summary({ received: 1, sent: 1, ingested: 1 })),
+    );
+
+    expect(exitCode).toBe(EXIT_INCOMPLETE);
+    expect(output).toContain("Could not write");
+    expect(output).toContain("Line 3: expected 6 fields but found 5");
   });
 });
 
@@ -235,7 +309,7 @@ describe("given bad input", () => {
       file: join(dir, "missing.csv"),
       apiUrl: "http://api.test",
       rejectsPath: join(dir, "r.csv"),
-      filter: { source: [], asset: [] },
+      filter: { source: [], asset: [], category: [] },
     };
     const deps = { fetch, signal: new AbortController().signal, idleTimeoutMs: 1000, print: () => {} };
 

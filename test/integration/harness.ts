@@ -203,7 +203,7 @@ export async function runFlow({ csv, behaviour = {}, filter = {}, apiKey = API_K
         file,
         apiUrl: `http://127.0.0.1:${port}`,
         rejectsPath,
-        filter: { source: [], asset: [], ...filter },
+        filter: { source: [], asset: [], category: [], ...filter },
       },
       {
         fetch: globalThis.fetch,

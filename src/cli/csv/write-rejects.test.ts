@@ -25,6 +25,20 @@ describe("formatRejects", () => {
     expect(output.split("\r\n")[1]?.split(";")[0]).toBe(expected);
   });
 
+  it("can leave out the header, for appending to an existing file", () => {
+    expect(formatRejects([{ line: 436, fields, reason: "invalid ip" }], { header: false })).toBe(
+      "1;server_a;N;27/02/2024 00:00;defender;phising;436;invalid ip\r\n",
+    );
+  });
+
+  it("shows terminal escape codes as text, and keeps line breaks", () => {
+    const output = formatRejects([{ line: 2, fields: ["\u001b[31mred", "a\nb", "", "", "", ""], reason: "r" }]);
+
+    expect(output).not.toContain("\u001b");
+    expect(output).toContain("\\x1b[31mred");
+    expect(output).toContain('"a\nb"');
+  });
+
   it("quotes cells that would break the columns", () => {
     const output = formatRejects([{ line: 2, fields: ['a;b"c', "", "", "", "", ""], reason: "r" }]);
 

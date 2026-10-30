@@ -1,4 +1,6 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, appendFile, readFile, stat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import type { RawRecord } from "../shared/wire.js";
 import { type IngestDeps, postIngest } from "./api/ingest-client.js";
 import { type CsvRow, parseCsv } from "./csv/read-csv.js";
@@ -28,6 +30,24 @@ async function readInput(file: string): Promise<string> {
   }
 }
 
+// Checked before anything is sent: finding out after the rows are stored would mean
+// losing the list of rows that need attention.
+async function assertCanWriteRejects({ file, rejectsPath }: RunOptions): Promise<void> {
+  // The input is often the only copy of this data, so it must never be overwritten.
+  if (resolve(file) === resolve(rejectsPath)) {
+    throw new UsageError("--rejects must not be the input file.");
+  }
+  const canAccess = (path: string, mode?: number) =>
+    access(path, mode).then(
+      () => true,
+      () => false,
+    );
+  const target = (await canAccess(rejectsPath)) ? rejectsPath : dirname(rejectsPath);
+  if (!(await canAccess(target, constants.W_OK))) {
+    throw new UsageError(`Can't write the rejects file to ${rejectsPath}.`);
+  }
+}
+
 // Reads and filters locally, sends the rest, and accounts for every row in the file.
 // The exit code is 0 only if every row that should have been stored was.
 export async function runIngest(
@@ -36,6 +56,7 @@ export async function runIngest(
 ): Promise<number> {
   const { print } = deps;
   const filter = buildFilter(options.filter);
+  await assertCanWriteRejects(options);
   const { rows, unreadable } = parseCsv(await readInput(options.file));
 
   const rejects: RejectedRow[] = unreadable.map(({ line, fields, reason }) => ({ line, fields, reason }));
@@ -68,8 +89,22 @@ export async function runIngest(
 
   const writeRejects = async () => {
     if (rejects.length === 0) return;
-    await writeFile(options.rejectsPath, formatRejects(rejects.sort((a, b) => a.line - b.line)));
-    print(`Rows needing attention: ${rejects.length}, with reasons in ${options.rejectsPath}`);
+    rejects.sort((a, b) => a.line - b.line);
+    try {
+      // Appended, so a rerun can't wipe out what an earlier run reported. The cost is that
+      // a row rejected twice is listed twice.
+      const isNewFile = await stat(options.rejectsPath).then(
+        ({ size }) => size === 0,
+        () => true,
+      );
+      await appendFile(options.rejectsPath, formatRejects(rejects, { header: isNewFile }));
+      print(`Rows needing attention: ${rejects.length}, added to ${options.rejectsPath}`);
+    } catch {
+      // The path was fine at the start, but the disk may be full or the path may be a
+      // folder. Rows are already stored, so the list still has to reach the user.
+      print(`Could not write ${options.rejectsPath}. Rows needing attention: ${rejects.length}`);
+      for (const { line, reason } of rejects) print(`Line ${line}: ${reason}`);
+    }
   };
 
   if (toSend.length === 0) {

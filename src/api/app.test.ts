@@ -69,6 +69,17 @@ describe("POST /ingest", () => {
     expect(await response.json()).toEqual({ error: "request body too large" });
   });
 
+  it.each([
+    ["the wrong content type", { "Content-Type": "text/plain" }],
+    ["no content type", {}],
+  ] as Array<[string, Record<string, string>]>)("answers 415 to %s", async (_name, headers) => {
+    const response = await app().request(
+      new Request("http://test/ingest", { method: "POST", headers, body: new Blob([JSON.stringify({ records: [] })]) }),
+    );
+
+    expect(response.status).toBe(415);
+  });
+
   it("does not offer any other route", async () => {
     const response = await app().request("http://test/ingest");
 
@@ -163,6 +174,7 @@ describe("POST /ingest", () => {
         const client = new AbortController();
         const response = await fetch(`http://127.0.0.1:${port}/ingest`, {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ records: [record(2)] }),
           signal: client.signal,
         });

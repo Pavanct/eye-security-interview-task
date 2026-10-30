@@ -1,4 +1,5 @@
-import { Command, InvalidArgumentError } from "commander";
+import { Command } from "commander";
+import { parseApiUrl } from "./api/api-url.js";
 import { UsageError } from "./errors.js";
 import { EXIT_USAGE, runIngest } from "./run.js";
 
@@ -6,11 +7,6 @@ import { EXIT_USAGE, runIngest } from "./run.js";
 const IDLE_TIMEOUT_MS = 30_000;
 
 const collect = (value: string, previous: string[]) => [...previous, value];
-
-function parseApiUrl(value: string): string {
-  if (!URL.canParse(value)) throw new InvalidArgumentError("must be a URL, like http://localhost:3000");
-  return value;
-}
 
 const program = new Command()
   .name("ingest-cli")
@@ -25,7 +21,7 @@ program
   .option("--api-url <url>", "URL of the ingest API", parseApiUrl, "http://localhost:3000")
   .option("--source <name>", "only rows from this source (repeatable)", collect, [])
   .option("--asset <name>", "only rows for this asset (repeatable)", collect, [])
-  .option("--category <name>", "only rows in this category, in any spelling")
+  .option("--category <name>", "only rows in this category, in any spelling (repeatable)", collect, [])
   .option("--from <date>", "only rows on or after this date (DD/MM/YYYY or YYYY-MM-DD, UTC)")
   .option("--to <date>", "only rows on or before this date (DD/MM/YYYY or YYYY-MM-DD, UTC)")
   .option("--rejects <path>", "where to write rows that need attention (default: <file>.rejects.csv)")

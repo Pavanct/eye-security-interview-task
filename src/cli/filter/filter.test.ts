@@ -13,7 +13,7 @@ const row: CsvRow = {
   category: "phising",
 };
 
-const flags = (overrides: Partial<FilterFlags>): FilterFlags => ({ source: [], asset: [], ...overrides });
+const flags = (overrides: Partial<FilterFlags>): FilterFlags => ({ source: [], asset: [], category: [], ...overrides });
 const decide = (overrides: Partial<FilterFlags>, target: CsvRow = row) => buildFilter(flags(overrides))(target).kind;
 
 describe("buildFilter", () => {
@@ -29,9 +29,11 @@ describe("buildFilter", () => {
     ["source is only a prefix", { source: ["def"] }, "drop"],
     ["asset matches", { asset: ["server_a"] }, "keep"],
     ["asset differs", { asset: ["server_b"] }, "drop"],
-    ["category matches through its alias", { category: "phishing" }, "keep"],
-    ["category flag uses the same typo", { category: "Phising" }, "keep"],
-    ["category differs", { category: "valid accounts" }, "drop"],
+    ["category matches through its alias", { category: ["phishing"] }, "keep"],
+    ["category flag uses the same typo", { category: ["Phising"] }, "keep"],
+    ["category differs", { category: ["valid accounts"] }, "drop"],
+    ["one repeated category matches", { category: ["valid accounts", "phishing"] }, "keep"],
+    ["no repeated category matches", { category: ["valid accounts", "content injection"] }, "drop"],
     ["both flags match", { source: ["defender"], asset: ["server_a"] }, "keep"],
     ["only one of two flags matches", { source: ["defender"], asset: ["server_b"] }, "drop"],
   ])("when %s", (_name, overrides, expected) => {
@@ -64,7 +66,7 @@ describe("buildFilter", () => {
 
   describe("given a row whose value can't be compared", () => {
     it("when filtering by category, then an empty category is uncheckable", () => {
-      expect(buildFilter(flags({ category: "phishing" }))({ ...row, category: "" })).toEqual({
+      expect(buildFilter(flags({ category: ["phishing"] }))({ ...row, category: "" })).toEqual({
         kind: "uncheckable",
         reason: "empty category",
       });
@@ -78,7 +80,7 @@ describe("buildFilter", () => {
     });
 
     it("when another flag clearly excludes it, then it is simply dropped", () => {
-      expect(decide({ category: "phishing", source: ["crowdstrike"] }, { ...row, category: "" })).toBe("drop");
+      expect(decide({ category: ["phishing"], source: ["crowdstrike"] }, { ...row, category: "" })).toBe("drop");
     });
 
     it("when no flag reads that value, then it is kept for the API to judge", () => {
@@ -91,7 +93,8 @@ describe("buildFilter", () => {
     ["month-first", { to: "02/27/2024" }, "--to"],
     ["not a date", { from: "yesterday" }, "--from"],
     ["from after to", { from: "02/02/2024", to: "01/02/2024" }, "--from must not be later"],
-    ["an unknown category", { category: "phishng" }, "--category"],
+    ["an unknown category", { category: ["phishng"] }, "--category"],
+    ["one unknown category among valid ones", { category: ["phishing", "phishng"] }, "--category"],
   ])("refuses %s before reading anything", (_name, overrides, message) => {
     expect(() => buildFilter(flags(overrides))).toThrow(UsageError);
     expect(() => buildFilter(flags(overrides))).toThrow(message);

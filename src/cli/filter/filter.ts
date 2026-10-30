@@ -6,7 +6,7 @@ import { UsageError } from "../errors.js";
 export interface FilterFlags {
   source: string[];
   asset: string[];
-  category?: string;
+  category: string[];
   from?: string;
   to?: string;
 }
@@ -38,14 +38,19 @@ function oneOf(values: string[], read: (row: CsvRow) => string): Check {
   return (row) => (allowed.has(read(row).toLowerCase()) ? KEEP : DROP);
 }
 
-function categoryIs(flag: string): Check {
-  const wanted = normaliseCategory(flag);
-  if (!wanted.ok) throw new UsageError(`--category "${flag}" is not a known category.`);
+function categoryIn(flags: string[]): Check {
+  const wanted = new Set(
+    flags.map((flag) => {
+      const normalised = normaliseCategory(flag);
+      if (!normalised.ok) throw new UsageError(`--category "${flag}" is not a known category.`);
+      return normalised.category;
+    }),
+  );
 
   return (row) => {
     const category = normaliseCategory(row.category);
     if (!category.ok) return { kind: "uncheckable", reason: category.reason };
-    return category.category === wanted.category ? KEEP : DROP;
+    return wanted.has(category.category) ? KEEP : DROP;
   };
 }
 
@@ -66,7 +71,7 @@ export function buildFilter(flags: FilterFlags): Check {
 
   if (flags.source.length > 0) checks.push(oneOf(flags.source, (row) => row.source));
   if (flags.asset.length > 0) checks.push(oneOf(flags.asset, (row) => row.asset_name));
-  if (flags.category !== undefined) checks.push(categoryIs(flags.category));
+  if (flags.category.length > 0) checks.push(categoryIn(flags.category));
 
   if (flags.from !== undefined || flags.to !== undefined) {
     const from = flags.from === undefined ? undefined : parseFlagDate("from", flags.from).startOf("day");

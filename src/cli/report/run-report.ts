@@ -91,12 +91,17 @@ export class RunReport {
     this.failures.set(line, reason);
   }
 
-  // Marks rows with no answer. They may or may not be stored: the connection could have
-  // dropped after a batch went out, so rerunning them can create duplicates.
+  // Marks rows with no answer. If the API never took the request, they're safe to resend.
+  // Otherwise they may or may not be stored: the connection could have dropped after a
+  // batch went out, so rerunning them can create duplicates.
   finish(outcome: IngestOutcome): void {
     if (outcome.kind === "finished") return;
+    const neverStarted = outcome.kind === "http_error" || outcome.kind === "unreachable";
+    const reason = neverStarted
+      ? "not sent: the API did not take the request"
+      : "run did not finish, may already be stored";
     for (const line of this.sentLines) {
-      if (!this.settled.has(line)) this.failures.set(line, "run did not finish, may already be stored");
+      if (!this.settled.has(line)) this.failures.set(line, reason);
     }
   }
 

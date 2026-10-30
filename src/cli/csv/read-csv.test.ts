@@ -47,6 +47,27 @@ describe("parseCsv", () => {
     ]);
   });
 
+  it.each([
+    ["uppercase", "ID;ASSET_NAME;IP;CREATED_UTC;SOURCE;CATEGORY"],
+    ["spaces around names", "id ; asset_name ; ip ; created_utc ; source ; category"],
+  ])("accepts headers with %s", (_name, header) => {
+    expect(parseCsv(`${header}\n1;a;b;c;d;e\n`).rows[0]).toMatchObject({ id: "1", category: "e" });
+  });
+
+  it("refuses a required column that appears twice, as either could be the real one", () => {
+    expect(() => parseCsv(`id;${HEADER}\n9;1;a;b;c;d;e\n`)).toThrow("more than once: id");
+  });
+
+  it("refuses a quote that never closes, naming the problem", () => {
+    expect(() => parseCsv(`${HEADER}\n1;"a;b;c;d;e\n2;a;b;c;d;e\n`)).toThrow("never closed");
+  });
+
+  it("gives a multi-line row the line it starts on, and later rows their real line", () => {
+    const { rows } = parseCsv(`${HEADER}\n1;a;b;c;d;e\n2;"x\ny";b;c;d;e\n3;a;b;c;d;e\n`);
+
+    expect(rows.map((r) => r.line)).toEqual([2, 3, 5]);
+  });
+
   it("does not fail the file because of a stray quote", () => {
     const { rows } = parseCsv(`${HEADER}\n1;a"b;c;d;e;f\n`);
 

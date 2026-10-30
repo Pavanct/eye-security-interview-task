@@ -20,6 +20,8 @@ describe("validateRecord", () => {
 
   it.each([
     ["invalid id", { id: "abc" }],
+    ["invalid id", { id: "007" }],
+    ["invalid id", { id: "00" }],
     ["invalid id", { id: "" }],
     ["invalid id", { id: "-1" }],
     ["invalid id", { id: "1.5" }],

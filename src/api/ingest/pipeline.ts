@@ -10,11 +10,10 @@ export interface Enricher {
   enrich(logLine: LogLine, signal?: AbortSignal): Promise<Result<EnrichmentDetails> & { attempts: number }>;
 }
 
+type SendResult = Result<AnalyticsResponse> & { attempts: number; mayBeDuplicated?: boolean };
+
 export interface AnalyticsSink {
-  send(
-    events: AnalyticsEvent[],
-    signal?: AbortSignal,
-  ): Promise<Result<AnalyticsResponse> & { attempts: number; mayBeDuplicated?: boolean }>;
+  send(events: AnalyticsEvent[], signal?: AbortSignal): Promise<SendResult>;
 }
 
 export interface PipelineDeps {
@@ -27,9 +26,23 @@ export interface PipelineDeps {
   logger: Logger;
 }
 
+// What the steps of one run share.
+interface Run {
+  deps: PipelineDeps;
+  emit: (event: StreamEvent) => void;
+  signal: AbortSignal;
+  summary: RunSummary;
+}
+
 interface Enrichable {
   line: number;
   logLine: LogLine;
+}
+
+interface EnrichedGroup {
+  events: AnalyticsEvent[];
+  lines: number[];
+  fatalReason?: string;
 }
 
 // Validate, then for each group: enrich it, send it. Every record ends up in exactly one
@@ -51,7 +64,7 @@ export async function runPipeline(
   emit: (event: StreamEvent) => void,
   signal: AbortSignal,
 ): Promise<RunSummary | undefined> {
-  const { enricher, sink, batchSize, shutdown, logger } = deps;
+  const { sink, batchSize, shutdown, logger } = deps;
   const summary: RunSummary = {
     received: records.length,
     rejected: 0,
@@ -62,6 +75,7 @@ export async function runPipeline(
     analyticsFailed: 0,
     possibleDuplicates: 0,
   };
+  const run: Run = { deps, emit, signal, summary };
 
   const stopRun = (reason: string): undefined => {
     logger.error({ reason, summary }, "run stopped");
@@ -69,70 +83,22 @@ export async function runPipeline(
     return undefined;
   };
 
-  const valid = validateAll(records, summary, deps, emit);
-
-  for (const group of chunk(valid, batchSize)) {
+  for (const group of chunk(validateAll(records, run), batchSize)) {
     if (signal.aborted) break;
     // Only checked between groups, so a batch that has started is never abandoned halfway.
     if (shutdown.aborted) return stopRun("server is shutting down");
 
-    const results = await Promise.all(
-      group.map(async ({ line, logLine }) => ({ line, logLine, result: await enricher.enrich(logLine, signal) })),
-    );
+    const { events, lines, fatalReason } = await enrichGroup(group, run);
     if (signal.aborted) break;
-
-    for (const { result } of results) {
-      if (!result.ok && result.fatal) return stopRun(result.reason);
-    }
-
-    const events: AnalyticsEvent[] = [];
-    const lines: number[] = [];
-    for (const { line, logLine, result } of results) {
-      if (result.ok) {
-        emit({ type: "enriched", line });
-        // The enrichment category replaces ours: analytics wants the MITRE handle.
-        events.push({ ...logLine, ...result.value });
-        lines.push(line);
-      } else {
-        summary.enrichmentFailed++;
-        logger.warn({ line, reason: result.reason, attempts: result.attempts }, "enrichment failed");
-        emit({ type: "enrichment_failed", line, reason: result.reason });
-      }
-    }
-
+    if (fatalReason !== undefined) return stopRun(fatalReason);
     if (events.length === 0) continue;
 
     const result = await sink.send(events, signal);
 
     // A stored batch is counted even if the client has just gone, so the logs stay accurate.
-    if (result.ok) {
-      const { itemsIngested } = result.value;
-      summary.sent += events.length;
-      summary.ingested += itemsIngested;
-      if (itemsIngested !== events.length) {
-        // The response doesn't say which items were stored, so this can only be reported per batch.
-        logger.warn({ sent: events.length, ingested: itemsIngested, lines }, "partial ingestion");
-      }
-      if (result.mayBeDuplicated) {
-        summary.possibleDuplicates += events.length;
-        logger.warn({ lines, attempts: result.attempts }, "batch may have been stored twice");
-      }
-      logger.info({ sent: events.length, ingested: itemsIngested, attempts: result.attempts }, "batch sent");
-      emit({
-        type: "batch_sent",
-        lines,
-        ingested: itemsIngested,
-        ...(result.mayBeDuplicated ? { possibleDuplicates: true as const } : {}),
-      });
-    } else if (signal.aborted) {
-      break;
-    } else if (result.fatal) {
-      return stopRun(result.reason);
-    } else {
-      summary.analyticsFailed += events.length;
-      logger.error({ reason: result.reason, attempts: result.attempts, lines }, "batch failed");
-      emit({ type: "batch_failed", lines, reason: result.reason });
-    }
+    if (!result.ok && signal.aborted) break;
+    if (!result.ok && result.fatal) return stopRun(result.reason);
+    recordSendResult(result, lines, run);
   }
 
   if (signal.aborted) {
@@ -145,12 +111,7 @@ export async function runPipeline(
   return summary;
 }
 
-function validateAll(
-  records: RawRecord[],
-  summary: RunSummary,
-  { logger }: PipelineDeps,
-  emit: (event: StreamEvent) => void,
-): Enrichable[] {
+function validateAll(records: RawRecord[], { deps: { logger }, emit, summary }: Run): Enrichable[] {
   const seenIds = new Set<number>();
   const valid: Enrichable[] = [];
 
@@ -173,4 +134,61 @@ function validateAll(
   }
 
   return valid;
+}
+
+async function enrichGroup(group: Enrichable[], { deps, emit, signal, summary }: Run): Promise<EnrichedGroup> {
+  const results = await Promise.all(
+    group.map(async ({ line, logLine }) => ({ line, logLine, result: await deps.enricher.enrich(logLine, signal) })),
+  );
+
+  const enriched: EnrichedGroup = { events: [], lines: [] };
+  // A call cut short by the client leaving isn't a failure of that record.
+  if (signal.aborted) return enriched;
+
+  for (const { result } of results) {
+    if (!result.ok && result.fatal) return { ...enriched, fatalReason: result.reason };
+  }
+
+  for (const { line, logLine, result } of results) {
+    if (result.ok) {
+      emit({ type: "enriched", line });
+      // The enrichment category replaces ours: analytics wants the MITRE handle.
+      enriched.events.push({ ...logLine, ...result.value });
+      enriched.lines.push(line);
+    } else {
+      summary.enrichmentFailed++;
+      deps.logger.warn({ line, reason: result.reason, attempts: result.attempts }, "enrichment failed");
+      emit({ type: "enrichment_failed", line, reason: result.reason });
+    }
+  }
+
+  return enriched;
+}
+
+function recordSendResult(result: SendResult, lines: number[], { deps: { logger }, emit, summary }: Run): void {
+  if (!result.ok) {
+    summary.analyticsFailed += lines.length;
+    logger.error({ reason: result.reason, attempts: result.attempts, lines }, "batch failed");
+    emit({ type: "batch_failed", lines, reason: result.reason });
+    return;
+  }
+
+  const { itemsIngested } = result.value;
+  summary.sent += lines.length;
+  summary.ingested += itemsIngested;
+  if (itemsIngested !== lines.length) {
+    // The response doesn't say which items were stored, so this can only be reported per batch.
+    logger.warn({ sent: lines.length, ingested: itemsIngested, lines }, "partial ingestion");
+  }
+  if (result.mayBeDuplicated) {
+    summary.possibleDuplicates += lines.length;
+    logger.warn({ lines, attempts: result.attempts }, "batch may have been stored twice");
+  }
+  logger.info({ sent: lines.length, ingested: itemsIngested, attempts: result.attempts }, "batch sent");
+  emit({
+    type: "batch_sent",
+    lines,
+    ingested: itemsIngested,
+    ...(result.mayBeDuplicated ? { possibleDuplicates: true as const } : {}),
+  });
 }

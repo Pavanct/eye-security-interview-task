@@ -137,6 +137,7 @@ Zod schemas are hand-written from `openapi.json` and stricter than it, because t
 
 - Move the alias table into versioned configuration, and report how often each alias is used.
 - Support ids beyond JavaScript's safe integer range.
+- Generate types from `openapi.json` as a compile-time check on the schemas. Not done because the generator (`openapi-typescript`) needs TypeScript 5's compiler API, which TypeScript 7 doesn't have, and generated types alone would leave every field optional. The contract test covers most of this for now.
 
 ---
 
@@ -162,7 +163,9 @@ The Enrichment Service has "intermittent issues", possibly unresolved. Analytics
 
 ### Decision
 
-We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 attempts, with backoff starting at 200 ms and doubling, with full jitter, capped at 5 seconds. Analytics gets 3 attempts, paced by the rate limiter instead of a backoff. Timeouts are 5 seconds for enrichment and 10 seconds for analytics. Enrichment concurrency is 5.
+We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 attempts, with backoff starting at 200 ms and doubling, with full jitter, capped at 5 seconds. Analytics gets 3 attempts, paced by the rate limiter instead of a backoff. Timeouts are 5 seconds for enrichment and 10 seconds for analytics.
+
+**Changed during implementation:** enrichment first ran through a small helper that limited it to 5 calls at a time. It was removed. Analytics accepts one batch every 10 seconds and an enrichment call takes about 30 ms, so enrichment speed doesn't change how long a run takes. Records are now enriched one group of 20 at a time, which already caps the calls. The cost is that a failed record leaves its batch short rather than being replaced, and up to 20 calls can hit a flaky service at once. If analytics stopped being the bottleneck, bounded concurrency would be worth adding back.
 
 **Changed during implementation:** the plan was 3 enrichment attempts. In a small test against the real service, 7 of 30 calls returned a 500 (about 23%). At that rate 3 attempts would lose about 1% of records, and 5 attempts less than 0.1%. It's a small sample, so the number is configurable.
 

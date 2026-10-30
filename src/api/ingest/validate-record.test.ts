@@ -47,7 +47,7 @@ describe("validateRecord", () => {
   });
 
   it("rejects exactly the known bad rows in the sample file", () => {
-    const lines = readFileSync(new URL("../../example_data_2.csv", import.meta.url), "utf8").split("\r\n");
+    const lines = readFileSync(new URL("../../../example_data_2.csv", import.meta.url), "utf8").split("\r\n");
     const rejected: Array<[number, string]> = [];
 
     lines.forEach((text, index) => {

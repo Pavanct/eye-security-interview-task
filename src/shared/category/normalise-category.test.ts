@@ -47,7 +47,7 @@ describe("normaliseCategory", () => {
   );
 
   it("handles every category in the sample file, apart from the one empty value", () => {
-    const rows = readFileSync(new URL("../../example_data_2.csv", import.meta.url), "utf8")
+    const rows = readFileSync(new URL("../../../example_data_2.csv", import.meta.url), "utf8")
       .split("\r\n")
       .slice(1)
       .map((line) => line.split(";"))

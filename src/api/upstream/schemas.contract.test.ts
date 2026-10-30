@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CATEGORIES } from "../shared/categories.js";
+import { CATEGORIES } from "../../shared/category/categories.js";
 import {
   MITRE_TECHNIQUES,
   analyticsEventSchema,
@@ -9,7 +9,7 @@ import {
   logLineSchema,
 } from "./schemas.js";
 
-const spec = JSON.parse(readFileSync(new URL("../../openapi.json", import.meta.url), "utf8"));
+const spec = JSON.parse(readFileSync(new URL("../../../openapi.json", import.meta.url), "utf8"));
 const schemas = spec.components.schemas;
 
 // Builds a payload from the spec's own first examples, so a change in the spec's

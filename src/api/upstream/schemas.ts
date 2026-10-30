@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CATEGORIES } from "../shared/categories.js";
+import { CATEGORIES } from "../../shared/category/categories.js";
 
 // Hand-written from openapi.json rather than generated. The spec has no `required`
 // lists, so generated types would mark every field optional and give no runtime

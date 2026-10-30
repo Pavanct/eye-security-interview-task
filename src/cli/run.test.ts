@@ -147,7 +147,11 @@ describe("given rows with problems", () => {
 
   it("when a repeated id is flagged, then it's only a warning", async () => {
     const { exitCode, output } = await run([row(1), row(1)], async () =>
-      ndjson({ type: "id_conflict", line: 3 }, { type: "batch_sent", lines: [2, 3], ingested: 2 }, summary({ idConflicts: 1 })),
+      ndjson(
+        { type: "id_conflict", line: 3 },
+        { type: "batch_sent", lines: [2, 3], ingested: 2 },
+        summary({ idConflicts: 1 }),
+      ),
     );
 
     expect(exitCode).toBe(EXIT_OK);
@@ -183,15 +187,26 @@ describe("given a batch may have been stored twice", () => {
 describe("given the run doesn't finish", () => {
   it.each([
     ["the stream ends early", async () => ndjson({ type: "batch_sent", lines: [2], ingested: 1 }), "incomplete"],
-    ["the API stops the run", async () => ndjson({ type: "batch_sent", lines: [2], ingested: 1 }, { type: "run_failed", reason: "server is shutting down" }), "server is shutting down"],
-  ] as Array<[string, typeof fetch, string]>)("when %s, then unconfirmed rows are reported", async (_name, fetchFn, message) => {
-    const { exitCode, output, rejects } = await run([row(1), row(2)], fetchFn);
+    [
+      "the API stops the run",
+      async () =>
+        ndjson(
+          { type: "batch_sent", lines: [2], ingested: 1 },
+          { type: "run_failed", reason: "server is shutting down" },
+        ),
+      "server is shutting down",
+    ],
+  ] as Array<[string, typeof fetch, string]>)(
+    "when %s, then unconfirmed rows are reported",
+    async (_name, fetchFn, message) => {
+      const { exitCode, output, rejects } = await run([row(1), row(2)], fetchFn);
 
-    expect(exitCode).toBe(EXIT_INCOMPLETE);
-    expect(output).toContain(message);
-    expect(rejects).toContain("3;run did not finish");
-    expect(rejects).not.toContain("2;run did not finish");
-  });
+      expect(exitCode).toBe(EXIT_INCOMPLETE);
+      expect(output).toContain(message);
+      expect(rejects).toContain("3;run did not finish");
+      expect(rejects).not.toContain("2;run did not finish");
+    },
+  );
 
   it("when the API can't be reached, then every row is reported", async () => {
     const { exitCode, output, rejects } = await run([row(1)], async () => {
@@ -204,8 +219,9 @@ describe("given the run doesn't finish", () => {
   });
 
   it("when the API refuses the request, then its message is shown", async () => {
-    const { exitCode, output } = await run([row(1)], async () =>
-      new Response(JSON.stringify({ error: "too many records" }), { status: 413 }),
+    const { exitCode, output } = await run(
+      [row(1)],
+      async () => new Response(JSON.stringify({ error: "too many records" }), { status: 413 }),
     );
 
     expect(exitCode).toBe(EXIT_INCOMPLETE);

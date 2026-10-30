@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { API_KEY, HEADER, csvRows, runFlow } from "./harness.js";
+import { API_KEY, csvRows, HEADER, runFlow } from "./harness.js";
 
 const sample = readFileSync(new URL("../../example_data_2.csv", import.meta.url), "utf8");
 const csv = (rows: string[]) => `${[HEADER, ...rows].join("\r\n")}\r\n`;
@@ -78,9 +78,7 @@ describe("given a flaky enrichment service and a rate limit hit", () => {
       csv: csv(csvRows(25)),
       behaviour: {
         enrichment: (_body, attempt) =>
-          attempt <= 2
-            ? { status: 500, body: JSON.stringify({ error: "internal server error" }) }
-            : undefined,
+          attempt <= 2 ? { status: 500, body: JSON.stringify({ error: "internal server error" }) } : undefined,
         analytics: (_events, call) =>
           call === 1
             ? { status: 429, body: "<!doctype html>", headers: { "retry-after": "1", "content-type": "text/html" } }

@@ -132,7 +132,11 @@ describe("given the caller is aborted", () => {
   });
 
   it("when aborted during the wait, then acquire returns false", async () => {
-    const limiter = new IntervalRateLimiter(INTERVAL, () => 1_000_000, async () => false);
+    const limiter = new IntervalRateLimiter(
+      INTERVAL,
+      () => 1_000_000,
+      async () => false,
+    );
     await limiter.acquire();
 
     expect(await limiter.acquire()).toBe(false);

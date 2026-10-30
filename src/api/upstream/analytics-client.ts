@@ -1,7 +1,7 @@
 import type { IntervalRateLimiter } from "../lib/rate-limiter.js";
-import { withRetry, type AttemptOutcome, type Result, type RetryDeps } from "../lib/retry.js";
-import { analyticsResponseSchema, type AnalyticsEvent, type AnalyticsResponse } from "./schemas.js";
+import { type AttemptOutcome, type Result, type RetryDeps, withRetry } from "../lib/retry.js";
 import { postJson, type UpstreamHttp } from "./http.js";
+import { type AnalyticsEvent, type AnalyticsResponse, analyticsResponseSchema } from "./schemas.js";
 
 export class HttpAnalyticsSink {
   constructor(

@@ -1,6 +1,6 @@
-import { withRetry, type AttemptOutcome, type Result, type RetryDeps, type RetryPolicy } from "../lib/retry.js";
-import { enrichmentResponseSchema, type EnrichmentDetails, type LogLine } from "./schemas.js";
+import { type AttemptOutcome, type Result, type RetryDeps, type RetryPolicy, withRetry } from "../lib/retry.js";
 import { postJson, type UpstreamHttp } from "./http.js";
+import { type EnrichmentDetails, enrichmentResponseSchema, type LogLine } from "./schemas.js";
 
 export class HttpEnricher {
   constructor(

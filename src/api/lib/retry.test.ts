@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withRetry, type AttemptOutcome, type RetryDeps } from "./retry.js";
+import { type AttemptOutcome, type RetryDeps, withRetry } from "./retry.js";
 
 const policy = { maxAttempts: 4, baseDelayMs: 100, maxDelayMs: 300 };
 

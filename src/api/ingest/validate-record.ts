@@ -1,6 +1,6 @@
-import type { RawRecord } from "../../shared/wire.js";
 import { normaliseCategory } from "../../shared/category/normalise-category.js";
-import { logLineSchema, type LogLine } from "../upstream/schemas.js";
+import type { RawRecord } from "../../shared/wire.js";
+import { type LogLine, logLineSchema } from "../upstream/schemas.js";
 
 export type ValidatedRecord =
   | { ok: true; line: number; logLine: LogLine; categoryMatchedBy: "exact" | "alias" }

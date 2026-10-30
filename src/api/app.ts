@@ -4,7 +4,7 @@ import { bodyLimit } from "hono/body-limit";
 import { stream } from "hono/streaming";
 import type { Logger } from "pino";
 import { ingestRequestSchema, type StreamEvent } from "../shared/wire.js";
-import { runPipeline, type PipelineDeps } from "./ingest/pipeline.js";
+import { type PipelineDeps, runPipeline } from "./ingest/pipeline.js";
 
 export interface AppDeps {
   pipeline: Omit<PipelineDeps, "logger">;

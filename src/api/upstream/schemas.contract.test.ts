@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CATEGORIES } from "../../shared/category/categories.js";
 import {
-  MITRE_TECHNIQUES,
   analyticsEventSchema,
   analyticsResponseSchema,
   enrichmentResponseSchema,
   logLineSchema,
+  MITRE_TECHNIQUES,
 } from "./schemas.js";
 
 const spec = JSON.parse(readFileSync(new URL("../../../openapi.json", import.meta.url), "utf8"));

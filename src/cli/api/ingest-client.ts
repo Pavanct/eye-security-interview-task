@@ -1,4 +1,4 @@
-import { streamEventSchema, type RawRecord, type StreamEvent } from "../../shared/wire.js";
+import { type RawRecord, type StreamEvent, streamEventSchema } from "../../shared/wire.js";
 
 export type IngestOutcome =
   | { kind: "finished" }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpAnalyticsSink } from "./analytics-client.js";
 import { IntervalRateLimiter } from "../lib/rate-limiter.js";
+import { HttpAnalyticsSink } from "./analytics-client.js";
 import type { AnalyticsEvent } from "./schemas.js";
 
 const events: AnalyticsEvent[] = [
@@ -55,8 +55,7 @@ describe("HttpAnalyticsSink", () => {
   });
 
   describe("given the service answers 429 with an HTML page and Retry-After", () => {
-    const limited = () =>
-      new Response("<!doctype html>", { status: 429, headers: { "retry-after": "30" } });
+    const limited = () => new Response("<!doctype html>", { status: 429, headers: { "retry-after": "30" } });
 
     it("when retrying, then it waits as long as the service asked and then succeeds", async () => {
       const fetchFn = vi.fn<typeof fetch>().mockResolvedValueOnce(limited()).mockResolvedValueOnce(json(okBody));
@@ -99,13 +98,16 @@ describe("HttpAnalyticsSink", () => {
           throw new TypeError("fetch failed");
         },
       ],
-    ] as Array<[string, typeof fetch]>)("when %s is followed by a success, then it is flagged as a possible duplicate", async (_name, first) => {
-      const fetchFn = vi.fn<typeof fetch>().mockImplementationOnce(first).mockResolvedValueOnce(json(okBody));
+    ] as Array<[string, typeof fetch]>)(
+      "when %s is followed by a success, then it is flagged as a possible duplicate",
+      async (_name, first) => {
+        const fetchFn = vi.fn<typeof fetch>().mockImplementationOnce(first).mockResolvedValueOnce(json(okBody));
 
-      const result = await harness(fetchFn).sink.send(events);
+        const result = await harness(fetchFn).sink.send(events);
 
-      expect(result).toEqual({ ok: true, value: okBody, attempts: 2, mayBeDuplicated: true });
-    });
+        expect(result).toEqual({ ok: true, value: okBody, attempts: 2, mayBeDuplicated: true });
+      },
+    );
 
     it("when a 429 is followed by a success, then it isn't flagged, because a 429 stores nothing", async () => {
       const fetchFn = vi
@@ -121,8 +123,16 @@ describe("HttpAnalyticsSink", () => {
 
   it.each([
     ["a 500", async () => json({}, 500), "analytics unavailable, and the batch may already be stored"],
-    ["a status error with nothing stored", async () => json({ status: "error", itemsIngested: 0 }), "analytics stored nothing"],
-    ["a status ok with nothing stored", async () => json({ status: "ok", itemsIngested: 0 }), "analytics stored nothing"],
+    [
+      "a status error with nothing stored",
+      async () => json({ status: "error", itemsIngested: 0 }),
+      "analytics stored nothing",
+    ],
+    [
+      "a status ok with nothing stored",
+      async () => json({ status: "ok", itemsIngested: 0 }),
+      "analytics stored nothing",
+    ],
     [
       "a network error",
       async () => {
@@ -140,10 +150,26 @@ describe("HttpAnalyticsSink", () => {
   });
 
   it.each([
-    ["a 400", async () => json({ error: "input data should have between 1-20 items" }, 400), "analytics rejected the batch"],
-    ["a 200 with an invalid body, as the batch may be stored", async () => new Response("<html>"), "analytics returned an invalid response"],
-    ["a 200 claiming more items than were sent", async () => json({ status: "ok", itemsIngested: 2 }), "analytics returned an invalid response"],
-    ["a 200 with status error and items stored", async () => json({ status: "error", itemsIngested: 1 }), "analytics reported an error, and the batch may be partly stored"],
+    [
+      "a 400",
+      async () => json({ error: "input data should have between 1-20 items" }, 400),
+      "analytics rejected the batch",
+    ],
+    [
+      "a 200 with an invalid body, as the batch may be stored",
+      async () => new Response("<html>"),
+      "analytics returned an invalid response",
+    ],
+    [
+      "a 200 claiming more items than were sent",
+      async () => json({ status: "ok", itemsIngested: 2 }),
+      "analytics returned an invalid response",
+    ],
+    [
+      "a 200 with status error and items stored",
+      async () => json({ status: "error", itemsIngested: 1 }),
+      "analytics reported an error, and the batch may be partly stored",
+    ],
   ] as Array<[string, typeof fetch, string]>)("does not retry %s", async (_name, fetchFn, reason) => {
     const spy = vi.fn(fetchFn);
 

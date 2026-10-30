@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StreamEvent } from "../../shared/wire.js";
-import { postIngest, readLines, type IngestDeps } from "./ingest-client.js";
+import { type IngestDeps, postIngest, readLines } from "./ingest-client.js";
 
 const encoder = new TextEncoder();
 
@@ -88,8 +88,8 @@ describe("postIngest", () => {
   });
 
   it("passes each event on, and finishes on a summary", async () => {
-    const { outcome, events } = await call(async () =>
-      new Response(ndjson({ type: "heartbeat" }, { type: "enriched", line: 2 }, summary)),
+    const { outcome, events } = await call(
+      async () => new Response(ndjson({ type: "heartbeat" }, { type: "enriched", line: 2 }, summary)),
     );
 
     expect(outcome).toEqual({ kind: "finished" });
@@ -97,8 +97,8 @@ describe("postIngest", () => {
   });
 
   it("reports a run the API stopped, with its reason", async () => {
-    const { outcome } = await call(async () =>
-      new Response(ndjson({ type: "run_failed", reason: "enrichment rejected the API key" })),
+    const { outcome } = await call(
+      async () => new Response(ndjson({ type: "run_failed", reason: "enrichment rejected the API key" })),
     );
 
     expect(outcome).toEqual({ kind: "stopped", reason: "enrichment rejected the API key" });

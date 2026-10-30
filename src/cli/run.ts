@@ -1,11 +1,11 @@
 import { readFile, writeFile } from "node:fs/promises";
 import type { RawRecord } from "../shared/wire.js";
-import { postIngest, type IngestDeps } from "./api/ingest-client.js";
-import { parseCsv, type CsvRow } from "./csv/read-csv.js";
+import { type IngestDeps, postIngest } from "./api/ingest-client.js";
+import { type CsvRow, parseCsv } from "./csv/read-csv.js";
 import { formatRejects, type RejectedRow } from "./csv/write-rejects.js";
 import { UsageError } from "./errors.js";
 import { buildFilter, type FilterFlags } from "./filter/filter.js";
-import { RunReport, describeOutcome } from "./report/run-report.js";
+import { describeOutcome, RunReport } from "./report/run-report.js";
 
 export const EXIT_OK = 0;
 export const EXIT_INCOMPLETE = 1;
@@ -87,7 +87,10 @@ export async function runIngest(
     category: row.category,
   }));
 
-  const report = new RunReport(print, records.map((record) => record.line));
+  const report = new RunReport(
+    print,
+    records.map((record) => record.line),
+  );
   const outcome = await postIngest(options.apiUrl, records, (event) => report.handle(event), deps);
   report.finish(outcome);
 

@@ -2,8 +2,8 @@ import type { AddressInfo } from "node:net";
 import { serve } from "@hono/node-server";
 import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
-import { streamEventSchema, type RawRecord, type StreamEvent } from "../shared/wire.js";
-import { createApp, type AppDeps } from "./app.js";
+import { type RawRecord, type StreamEvent, streamEventSchema } from "../shared/wire.js";
+import { type AppDeps, createApp } from "./app.js";
 import type { AnalyticsSink, Enricher } from "./ingest/pipeline.js";
 
 const details = { asn: "AS8291", category: "T1566" as const, correlationId: 2318 };

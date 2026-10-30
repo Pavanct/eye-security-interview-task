@@ -23,7 +23,11 @@ export type NormalisedCategory =
 export function normaliseCategory(raw: string): NormalisedCategory {
   // Only known separators are stripped. Removing every non-letter would let
   // `phishing!` or other junk pass as a valid category instead of failing closed.
-  const key = raw.normalize("NFKC").trim().toLowerCase().replace(/[\s\-_()]/g, "");
+  const key = raw
+    .normalize("NFKC")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\-_()]/g, "");
 
   if (key === "") return { ok: false, reason: "empty category" };
   if (KNOWN.has(key)) return { ok: true, category: key as Category, matchedBy: "exact" };

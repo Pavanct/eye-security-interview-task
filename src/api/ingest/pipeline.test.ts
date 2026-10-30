@@ -2,7 +2,7 @@ import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
 import type { RawRecord, StreamEvent } from "../../shared/wire.js";
 import type { AnalyticsEvent } from "../upstream/schemas.js";
-import { runPipeline, type AnalyticsSink, type Enricher } from "./pipeline.js";
+import { type AnalyticsSink, type Enricher, runPipeline } from "./pipeline.js";
 
 const details = { asn: "AS8291", category: "T1566" as const, correlationId: 2318 };
 
@@ -174,7 +174,12 @@ describe("given enrichment fails for one record", () => {
 
     const { summary, ofType } = await run(records(3), { enricher, sink });
 
-    expect(sink.batches.flat().map((e) => e.id).sort()).toEqual([1002, 1004]);
+    expect(
+      sink.batches
+        .flat()
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual([1002, 1004]);
     expect(summary).toMatchObject({ enrichmentFailed: 1, sent: 2 });
     expect(ofType("enrichment_failed")).toEqual([
       { type: "enrichment_failed", line: 3, reason: "enrichment unavailable" },
@@ -234,7 +239,9 @@ describe("given a mix of every outcome", () => {
   it("when the run finishes, then every record is in exactly one counter", async () => {
     const enricher: Enricher = {
       enrich: async ({ id }) =>
-        id % 7 === 0 ? { ok: false, reason: "enrichment unavailable", attempts: 5 } : { ok: true, value: details, attempts: 1 },
+        id % 7 === 0
+          ? { ok: false, reason: "enrichment unavailable", attempts: 5 }
+          : { ok: true, value: details, attempts: 1 },
     };
     let call = 0;
     const sink: AnalyticsSink = {

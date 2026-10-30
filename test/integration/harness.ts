@@ -8,8 +8,8 @@ import { serve } from "@hono/node-server";
 import { pino } from "pino";
 import { loadConfig } from "../../src/api/config.js";
 import { createService } from "../../src/api/service.js";
-import { runIngest } from "../../src/cli/run.js";
 import type { FilterFlags } from "../../src/cli/filter/filter.js";
+import { runIngest } from "../../src/cli/run.js";
 
 export const API_KEY = "test-key";
 const INTERVAL_MS = 30;

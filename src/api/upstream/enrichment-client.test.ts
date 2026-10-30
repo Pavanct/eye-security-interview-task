@@ -63,7 +63,11 @@ describe("HttpEnricher", () => {
     ["a 503", async () => json({}, 503), "enrichment unavailable"],
     ["a 429", async () => json({}, 429), "enrichment unavailable"],
     ["a 200 with a missing field", async () => json({ asn: "AS1" }), "enrichment returned an invalid response"],
-    ["a 200 with an unknown technique", async () => json({ ...details, category: "T9" }), "enrichment returned an invalid response"],
+    [
+      "a 200 with an unknown technique",
+      async () => json({ ...details, category: "T9" }),
+      "enrichment returned an invalid response",
+    ],
     ["a 200 that isn't JSON", async () => new Response("<html>"), "enrichment returned an invalid response"],
     [
       "a network error",

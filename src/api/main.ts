@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { pino } from "pino";
-import { loadConfig, type Config } from "./config.js";
+import { type Config, loadConfig } from "./config.js";
 import { createService } from "./service.js";
 
 let config: Config;

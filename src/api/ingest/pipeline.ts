@@ -34,8 +34,11 @@ interface Enrichable {
 // shorten the run, and the group size already caps how many calls run at once. The cost:
 // a record that fails enrichment leaves its batch short rather than being replaced.
 //
-// Returns undefined if aborted. No summary is emitted then, which is how an interrupted
-// run stays distinguishable from a finished one.
+// A rejected API key stops the run at once: every remaining call would fail the same way,
+// and one clear error is more useful than a failure per record.
+//
+// Returns undefined if the run didn't finish, whether stopped or aborted. No summary is
+// emitted then, which keeps an unfinished run distinguishable from a finished one.
 export async function runPipeline(
   records: RawRecord[],
   deps: PipelineDeps,
@@ -53,6 +56,12 @@ export async function runPipeline(
     analyticsFailed: 0,
   };
 
+  const stopRun = (reason: string): undefined => {
+    logger.error({ reason, summary }, "run stopped");
+    emit({ type: "run_failed", reason });
+    return undefined;
+  };
+
   const valid = validateAll(records, summary, deps, emit);
 
   for (const group of chunk(valid, batchSize)) {
@@ -60,6 +69,10 @@ export async function runPipeline(
 
     const results = await Promise.all(group.map((item) => enricher.enrich(item.logLine, signal)));
     if (signal.aborted) break;
+
+    for (const result of results) {
+      if (!result.ok && result.fatal) return stopRun(result.reason);
+    }
 
     const events: AnalyticsEvent[] = [];
     const lines: number[] = [];
@@ -81,6 +94,7 @@ export async function runPipeline(
 
     const result = await sink.send(events, signal);
     if (signal.aborted) break;
+    if (!result.ok && result.fatal) return stopRun(result.reason);
 
     if (result.ok) {
       const { itemsIngested } = result.value;

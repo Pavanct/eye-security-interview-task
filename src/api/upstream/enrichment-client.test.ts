@@ -82,9 +82,19 @@ describe("HttpEnricher", () => {
   });
 
   it.each([
+    ["a 401", 401],
+    ["a 403", 403],
+  ])("treats %s as fatal, since no record can succeed with a bad key", async (_name, status) => {
+    const fetchFn = vi.fn<typeof fetch>(async () => json({ error: "api key invalid" }, status));
+
+    const result = await enricher(fetchFn).enrich(logLine);
+
+    expect(result).toEqual({ ok: false, reason: "enrichment rejected the API key", fatal: true, attempts: 1 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
     ["a 400", 400, "enrichment rejected the record"],
-    ["a 401", 401, "enrichment rejected the API key"],
-    ["a 403", 403, "enrichment rejected the API key"],
     ["a 404", 404, "enrichment rejected the record"],
   ])("does not retry %s", async (_name, status, reason) => {
     const fetchFn = vi.fn<typeof fetch>(async () => json({ error: "nope" }, status));

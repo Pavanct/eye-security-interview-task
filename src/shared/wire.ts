@@ -35,8 +35,9 @@ export type RunSummary = z.infer<typeof runSummarySchema>;
 // malicious CSV value can't end up in a terminal or a log through this stream.
 const reasonSchema = z.string();
 
-// One JSON object per line of the response. The stream has to end with `summary`:
-// if it ends without one, the CLI knows the run did not finish.
+// One JSON object per line of the response. A finished run ends with `summary`. A run
+// that had to stop ends with `run_failed`. If the stream ends with neither, the
+// connection or the server died, and the CLI knows the run did not finish.
 export const streamEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("started"), runId: z.string(), total: z.int().nonnegative() }),
   z.object({ type: z.literal("heartbeat") }),
@@ -56,6 +57,7 @@ export const streamEventSchema = z.discriminatedUnion("type", [
     lines: z.array(z.int().positive()),
     reason: reasonSchema,
   }),
+  z.object({ type: z.literal("run_failed"), reason: reasonSchema }),
   z.object({ type: z.literal("summary"), summary: runSummarySchema }),
 ]);
 export type StreamEvent = z.infer<typeof streamEventSchema>;

@@ -84,6 +84,17 @@ describe("given a permanent failure", () => {
   });
 });
 
+describe("given a fatal failure", () => {
+  it("when it happens, then it stops immediately and marks the result as fatal", async () => {
+    const { deps, attempt, calls } = harness([{ kind: "fatal", reason: "bad key" }]);
+
+    const result = await withRetry(attempt, policy, deps);
+
+    expect(result).toEqual({ ok: false, reason: "bad key", fatal: true, attempts: 1 });
+    expect(calls()).toBe(1);
+  });
+});
+
 describe("given the run is aborted", () => {
   it("when it was aborted before starting, then no attempt is made", async () => {
     const { deps, attempt, calls } = harness([ok]);

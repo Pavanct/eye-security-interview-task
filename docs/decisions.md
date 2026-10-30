@@ -173,7 +173,7 @@ We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 
 |---|---|
 | Enrichment 5xx, 429, timeout, network error or invalid 200 body | Retry. After the last attempt the record is marked failed, the rest continue, and it is never sent unenriched |
 | Enrichment 400 | No retry, the record is marked failed |
-| 401 or 403 from either service (not in the spec, but the real service returns 401) | No retry, since the key won't get better by trying again |
+| 401 or 403 from either service (not in the spec, but the real service returns 401) | The whole run stops with a `run_failed` event, since no other record can succeed. Batches already sent stay stored |
 | Analytics 429 | Wait for `Retry-After`, then retry through the limiter |
 | Analytics 5xx, timeout or network error | Retry through the limiter, then the batch is marked failed |
 | Analytics 400 | No retry, the batch is marked failed |

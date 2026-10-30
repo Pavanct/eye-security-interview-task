@@ -111,7 +111,6 @@ describe("HttpAnalyticsSink", () => {
 
   it.each([
     ["a 400", async () => json({ error: "input data should have between 1-20 items" }, 400), "analytics rejected the batch"],
-    ["a 401", async () => json({}, 401), "analytics rejected the API key"],
     ["a 200 with an invalid body, as the batch may be stored", async () => new Response("<html>"), "analytics returned an invalid response"],
   ] as Array<[string, typeof fetch, string]>)("does not retry %s", async (_name, fetchFn, reason) => {
     const spy = vi.fn(fetchFn);
@@ -120,6 +119,15 @@ describe("HttpAnalyticsSink", () => {
 
     expect(result).toEqual({ ok: false, reason, attempts: 1 });
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([401, 403])("treats a %i as fatal, since no batch can succeed with a bad key", async (status) => {
+    const fetchFn = vi.fn<typeof fetch>(async () => json({}, status));
+
+    const result = await harness(fetchFn).sink.send(events);
+
+    expect(result).toEqual({ ok: false, reason: "analytics rejected the API key", fatal: true, attempts: 1 });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 
   describe("given a 200 that stored only part of the batch", () => {

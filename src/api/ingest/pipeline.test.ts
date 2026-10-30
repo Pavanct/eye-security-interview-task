@@ -230,6 +230,42 @@ describe("given a mix of every outcome", () => {
   });
 });
 
+describe("given the API key is rejected", () => {
+  it("when enrichment rejects it, then the run stops with one clear error and sends nothing", async () => {
+    const enrich = vi.fn<Enricher["enrich"]>(async () => ({
+      ok: false,
+      reason: "enrichment rejected the API key",
+      fatal: true,
+      attempts: 1,
+    }));
+    const send = vi.fn<AnalyticsSink["send"]>();
+
+    const { summary, events, ofType } = await run(records(60), { enricher: { enrich }, sink: { send } });
+
+    expect(enrich).toHaveBeenCalledTimes(20);
+    expect(send).not.toHaveBeenCalled();
+    expect(summary).toBeUndefined();
+    expect(ofType("enrichment_failed")).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: "run_failed", reason: "enrichment rejected the API key" });
+  });
+
+  it("when analytics rejects it, then the run stops without trying more batches", async () => {
+    const send = vi.fn<AnalyticsSink["send"]>(async () => ({
+      ok: false,
+      reason: "analytics rejected the API key",
+      fatal: true,
+      attempts: 1,
+    }));
+
+    const { summary, events, ofType } = await run(records(60), { sink: { send } });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(summary).toBeUndefined();
+    expect(ofType("batch_failed")).toEqual([]);
+    expect(events.at(-1)).toEqual({ type: "run_failed", reason: "analytics rejected the API key" });
+  });
+});
+
 describe("given the client disconnects", () => {
   it("when aborted during a batch, then no more batches are sent and no summary is emitted", async () => {
     const controller = new AbortController();

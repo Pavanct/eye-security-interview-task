@@ -36,7 +36,7 @@ export class HttpEnricher {
 
     // 401 isn't in the spec, but the real service returns it for a bad key.
     if (outcome.status === 401 || outcome.status === 403) {
-      return { kind: "permanent", reason: "enrichment rejected the API key" };
+      return { kind: "fatal", reason: "enrichment rejected the API key" };
     }
     if (outcome.status === 429 || outcome.status >= 500) {
       return { kind: "retryable", reason: "enrichment unavailable" };

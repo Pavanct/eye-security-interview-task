@@ -1,12 +1,14 @@
 import type { Sleep } from "./timing.js";
 
-export type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
+// fatal means no other record can succeed either, so the whole run should stop.
+export type Result<T> = { ok: true; value: T } | { ok: false; reason: string; fatal?: true };
 
 // Each client decides what is worth retrying. This module only decides when.
 export type AttemptOutcome<T> =
   | { kind: "success"; value: T }
   | { kind: "retryable"; reason: string }
-  | { kind: "permanent"; reason: string };
+  | { kind: "permanent"; reason: string }
+  | { kind: "fatal"; reason: string };
 
 export interface RetryPolicy {
   maxAttempts: number;
@@ -33,6 +35,7 @@ export async function withRetry<T>(
     const outcome = await attempt(signal);
     if (outcome.kind === "success") return { ok: true, value: outcome.value, attempts: n };
     if (outcome.kind === "permanent") return { ok: false, reason: outcome.reason, attempts: n };
+    if (outcome.kind === "fatal") return { ok: false, reason: outcome.reason, fatal: true, attempts: n };
 
     lastReason = outcome.reason;
     if (n === policy.maxAttempts) break;

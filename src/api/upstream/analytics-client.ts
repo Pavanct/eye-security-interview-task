@@ -43,7 +43,7 @@ export class HttpAnalyticsSink {
       return { kind: "retryable", reason: "analytics rate limited the request" };
     }
     if (outcome.status === 401 || outcome.status === 403) {
-      return { kind: "permanent", reason: "analytics rejected the API key" };
+      return { kind: "fatal", reason: "analytics rejected the API key" };
     }
     if (outcome.status >= 500) return { kind: "retryable", reason: "analytics unavailable" };
     return { kind: "permanent", reason: "analytics rejected the batch" };

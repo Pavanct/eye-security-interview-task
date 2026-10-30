@@ -11,7 +11,7 @@ export interface FilterFlags {
   to?: string;
 }
 
-export type FilterDecision =
+type FilterDecision =
   | { kind: "keep" }
   | { kind: "drop" }
   // The row's value can't be compared, so we can't tell if it matches. It's reported

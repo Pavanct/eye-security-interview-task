@@ -85,20 +85,50 @@ describe("HttpAnalyticsSink", () => {
 
       const result = await sink.send(events);
 
-      expect(result).toEqual({ ok: true, value: okBody, attempts: 2 });
+      expect(result).toEqual({ ok: true, value: okBody, attempts: 2, mayBeDuplicated: true });
       expect(time()).toBe(INTERVAL);
     });
   });
 
+  describe("given an attempt that doesn't say whether the batch was stored", () => {
+    it.each([
+      ["a 500", async () => json({}, 500)],
+      [
+        "a network error",
+        async () => {
+          throw new TypeError("fetch failed");
+        },
+      ],
+    ] as Array<[string, typeof fetch]>)("when %s is followed by a success, then it is flagged as a possible duplicate", async (_name, first) => {
+      const fetchFn = vi.fn<typeof fetch>().mockImplementationOnce(first).mockResolvedValueOnce(json(okBody));
+
+      const result = await harness(fetchFn).sink.send(events);
+
+      expect(result).toEqual({ ok: true, value: okBody, attempts: 2, mayBeDuplicated: true });
+    });
+
+    it("when a 429 is followed by a success, then it isn't flagged, because a 429 stores nothing", async () => {
+      const fetchFn = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(new Response("<html>", { status: 429 }))
+        .mockResolvedValueOnce(json(okBody));
+
+      const result = await harness(fetchFn).sink.send(events);
+
+      expect(result).toEqual({ ok: true, value: okBody, attempts: 2 });
+    });
+  });
+
   it.each([
-    ["a 500", async () => json({}, 500), "analytics unavailable"],
-    ["a status error with nothing stored", async () => json({ status: "error", itemsIngested: 0 }), "analytics reported an error"],
+    ["a 500", async () => json({}, 500), "analytics unavailable, and the batch may already be stored"],
+    ["a status error with nothing stored", async () => json({ status: "error", itemsIngested: 0 }), "analytics stored nothing"],
+    ["a status ok with nothing stored", async () => json({ status: "ok", itemsIngested: 0 }), "analytics stored nothing"],
     [
       "a network error",
       async () => {
         throw new TypeError("fetch failed");
       },
-      "analytics unreachable",
+      "analytics unreachable, and the batch may already be stored",
     ],
   ] as Array<[string, typeof fetch, string]>)("retries %s", async (_name, fetchFn, reason) => {
     const spy = vi.fn(fetchFn);
@@ -112,6 +142,8 @@ describe("HttpAnalyticsSink", () => {
   it.each([
     ["a 400", async () => json({ error: "input data should have between 1-20 items" }, 400), "analytics rejected the batch"],
     ["a 200 with an invalid body, as the batch may be stored", async () => new Response("<html>"), "analytics returned an invalid response"],
+    ["a 200 claiming more items than were sent", async () => json({ status: "ok", itemsIngested: 2 }), "analytics returned an invalid response"],
+    ["a 200 with status error and items stored", async () => json({ status: "error", itemsIngested: 1 }), "analytics reported an error, and the batch may be partly stored"],
   ] as Array<[string, typeof fetch, string]>)("does not retry %s", async (_name, fetchFn, reason) => {
     const spy = vi.fn(fetchFn);
 
@@ -131,13 +163,11 @@ describe("HttpAnalyticsSink", () => {
   });
 
   describe("given a 200 that stored only part of the batch", () => {
-    it.each([
-      ["status ok", { status: "ok", itemsIngested: 12 }],
-      ["status error", { status: "error", itemsIngested: 12 }],
-    ])("when it says %s, then it is returned without a retry that would duplicate items", async (_name, body) => {
+    it("when it says ok, then it is returned without a retry that would duplicate items", async () => {
+      const body = { status: "ok", itemsIngested: 1 };
       const fetchFn = vi.fn<typeof fetch>(async () => json(body));
 
-      const result = await harness(fetchFn).sink.send(events);
+      const result = await harness(fetchFn).sink.send([...events, ...events]);
 
       expect(result).toEqual({ ok: true, value: body, attempts: 1 });
       expect(fetchFn).toHaveBeenCalledTimes(1);

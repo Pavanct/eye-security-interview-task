@@ -62,6 +62,7 @@ describe("given valid records", () => {
       sent: 3,
       ingested: 3,
       analyticsFailed: 0,
+      possibleDuplicates: 0,
     });
     expect(ofType("enriched")).toHaveLength(3);
     expect(ofType("batch_sent")).toHaveLength(1);
@@ -209,6 +210,26 @@ describe("given analytics stores only part of a batch", () => {
   });
 });
 
+describe("given a batch that may have been stored twice", () => {
+  it("when it finally succeeds, then the summary and the event both say so", async () => {
+    const sink: AnalyticsSink = {
+      send: async (events) => ({
+        ok: true,
+        value: { status: "ok", itemsIngested: events.length },
+        attempts: 2,
+        mayBeDuplicated: true,
+      }),
+    };
+
+    const { summary, ofType } = await run(records(3), { sink });
+
+    expect(summary).toMatchObject({ sent: 3, ingested: 3, possibleDuplicates: 3 });
+    expect(ofType("batch_sent")).toEqual([
+      { type: "batch_sent", lines: [2, 3, 4], ingested: 3, possibleDuplicates: true },
+    ]);
+  });
+});
+
 describe("given a mix of every outcome", () => {
   it("when the run finishes, then every record is in exactly one counter", async () => {
     const enricher: Enricher = {
@@ -314,6 +335,8 @@ describe("given the client disconnects", () => {
     expect(send).toHaveBeenCalledTimes(1);
     expect(summary).toBeUndefined();
     expect(ofType("summary")).toEqual([]);
+    // That batch was stored, so it still counts.
+    expect(ofType("batch_sent")).toHaveLength(1);
   });
 
   it("when already aborted, then nothing is sent", async () => {

@@ -12,7 +12,9 @@ const envSchema = z.object({
 
   MAX_RECORDS_PER_REQUEST: positiveInt(5000),
   HEARTBEAT_INTERVAL_MS: positiveInt(5000),
-  // Long enough for a batch waiting on the rate limiter (about 10 s) to go out and be answered.
+  // Enough for a normal batch to wait on the rate limiter (about 10 s), go out and be answered.
+  // A group stuck in retries can take longer. The process then exits, and the client reports
+  // an incomplete run, not a false success.
   SHUTDOWN_GRACE_MS: positiveInt(30_000),
 
   ENRICHMENT_TIMEOUT_MS: positiveInt(5000),

@@ -100,10 +100,10 @@ export async function postIngest(
     }
     return outcome;
   } catch {
+    // Checked first: a final event that has arrived still counts, whatever happens afterwards.
+    if (outcome.kind !== "stream_ended") return outcome;
     if (signal.aborted) return { kind: "interrupted" };
     if (idle.signal.aborted) return { kind: "timed_out" };
-    // A final event that arrived before the connection dropped still counts.
-    if (outcome.kind !== "stream_ended") return outcome;
     return connected ? { kind: "stream_ended" } : { kind: "unreachable" };
   } finally {
     clearTimeout(timer);

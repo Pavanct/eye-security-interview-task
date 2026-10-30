@@ -20,6 +20,7 @@ export class RunReport {
       sent: 0,
       ingested: 0,
       analyticsFailed: 0,
+      possibleDuplicates: 0,
     };
   }
 
@@ -45,15 +46,20 @@ export class RunReport {
       case "batch_sent":
         this.tally.sent += event.lines.length;
         this.tally.ingested += event.ingested;
-        if (event.ingested === event.lines.length) {
-          event.lines.forEach((line) => this.settled.add(line));
-        } else {
+        if (event.ingested !== event.lines.length) {
           // The response doesn't say which were stored, so all of them need checking.
-          const reason = `only ${event.ingested} of ${event.lines.length} in this batch were stored`;
+          const reason = `only ${event.ingested} of ${event.lines.length} in this batch were stored, unknown which`;
           event.lines.forEach((line) => this.fail(line, reason));
           this.print(`Warning: ${reason}`);
+        } else if (event.possibleDuplicates) {
+          this.tally.possibleDuplicates += event.lines.length;
+          const reason = "stored, but possibly twice: an earlier attempt had an unclear result";
+          event.lines.forEach((line) => this.fail(line, reason));
+          this.print(`Warning: a batch of ${event.lines.length} was ${reason}`);
+        } else {
+          event.lines.forEach((line) => this.settled.add(line));
         }
-        this.print(`Stored ${this.tally.ingested} of ${this.tally.received} rows`);
+        this.print(`Stored ${this.tally.ingested} of ${this.expectedToStore} rows`);
         break;
       case "batch_failed":
         this.tally.analyticsFailed += event.lines.length;
@@ -71,6 +77,11 @@ export class RunReport {
     }
   }
 
+  private get expectedToStore(): number {
+    const { received, rejected, enrichmentFailed, analyticsFailed } = this.tally;
+    return received - rejected - enrichmentFailed - analyticsFailed;
+  }
+
   private fail(line: number, reason: string): void {
     this.settled.add(line);
     this.failures.set(line, reason);
@@ -81,7 +92,7 @@ export class RunReport {
   finish(outcome: IngestOutcome): void {
     if (outcome.kind === "finished") return;
     for (const line of this.sentLines) {
-      if (!this.settled.has(line)) this.failures.set(line, "run did not finish");
+      if (!this.settled.has(line)) this.failures.set(line, "run did not finish, may already be stored");
     }
   }
 

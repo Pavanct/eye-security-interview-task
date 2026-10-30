@@ -29,6 +29,7 @@ describe("streamEventSchema", () => {
     { type: "enriched", line: 2 },
     { type: "enrichment_failed", line: 2, reason: "upstream unavailable" },
     { type: "batch_sent", lines: [2, 3], ingested: 2 },
+    { type: "batch_sent", lines: [2, 3], ingested: 2, possibleDuplicates: true },
     { type: "batch_failed", lines: [2, 3], reason: "analytics rejected the batch" },
     { type: "run_failed", reason: "enrichment rejected the API key" },
     {
@@ -41,6 +42,7 @@ describe("streamEventSchema", () => {
         sent: 2,
         ingested: 2,
         analyticsFailed: 0,
+        possibleDuplicates: 0,
       },
     },
   ])("accepts $type", (event) => {

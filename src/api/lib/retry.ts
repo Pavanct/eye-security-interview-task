@@ -19,6 +19,8 @@ export interface RetryPolicy {
 export interface RetryDeps {
   sleep: Sleep;
   random: () => number;
+  // A successful retry otherwise leaves no trace of why the first attempt failed.
+  onRetry?: (reason: string, attempt: number) => void;
 }
 
 export async function withRetry<T>(
@@ -39,6 +41,7 @@ export async function withRetry<T>(
 
     lastReason = outcome.reason;
     if (n === policy.maxAttempts) break;
+    deps.onRetry?.(outcome.reason, n);
 
     // Full jitter: with records enriched concurrently, a fixed backoff would send
     // every failed call back at the same moment and hit a struggling service together.

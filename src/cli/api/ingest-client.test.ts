@@ -36,7 +36,16 @@ describe("readLines", () => {
 
 const summary = {
   type: "summary",
-  summary: { received: 0, rejected: 0, idConflicts: 0, enrichmentFailed: 0, sent: 0, ingested: 0, analyticsFailed: 0 },
+  summary: {
+    received: 0,
+    rejected: 0,
+    idConflicts: 0,
+    enrichmentFailed: 0,
+    sent: 0,
+    ingested: 0,
+    analyticsFailed: 0,
+    possibleDuplicates: 0,
+  },
 };
 const ndjson = (...events: unknown[]) => events.map((e) => `${JSON.stringify(e)}\n`).join("");
 
@@ -152,6 +161,14 @@ describe("postIngest", () => {
       });
 
       expect(outcome).toEqual({ kind: "timed_out" });
+    });
+
+    it("when the summary has already arrived, then the run still counts as finished", async () => {
+      const { outcome } = await call(async (_url, init) => hanging(init?.signal, ndjson(summary)), {
+        idleTimeoutMs: 10,
+      });
+
+      expect(outcome).toEqual({ kind: "finished" });
     });
   });
 

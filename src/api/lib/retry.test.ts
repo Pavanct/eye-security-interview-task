@@ -52,6 +52,18 @@ describe("given attempts fail and then one succeeds", () => {
     expect(sleeps).toEqual([100, 200, 300]);
   });
 
+  it("when an attempt fails, then the reason is reported before retrying", async () => {
+    const { deps, attempt } = harness([fail, fail, ok]);
+    const retries: Array<[string, number]> = [];
+
+    await withRetry(attempt, policy, { ...deps, onRetry: (reason, n) => retries.push([reason, n]) });
+
+    expect(retries).toEqual([
+      ["upstream unavailable", 1],
+      ["upstream unavailable", 2],
+    ]);
+  });
+
   it("when jitter applies, then the delay is a fraction of the ceiling", async () => {
     const { deps, attempt, sleeps } = harness([fail, ok], 0.5);
 

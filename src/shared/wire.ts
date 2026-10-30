@@ -5,7 +5,7 @@ import { z } from "zod";
 // Every field is an unvalidated string on purpose. Checking content here would turn
 // one bad row into a 400 for the whole file; instead the API validates each record
 // and reports the bad ones individually.
-export const rawRecordSchema = z.object({
+const rawRecordSchema = z.object({
   // Line number in the source file, so a reject can point back at the original row.
   line: z.int().positive(),
   id: z.string(),
@@ -18,9 +18,8 @@ export type RawRecord = z.infer<typeof rawRecordSchema>;
 export const ingestRequestSchema = z.object({
   records: z.array(rawRecordSchema),
 });
-export type IngestRequest = z.infer<typeof ingestRequestSchema>;
 
-export const runSummarySchema = z.object({
+const runSummarySchema = z.object({
   received: z.int().nonnegative(),
   rejected: z.int().nonnegative(),
   idConflicts: z.int().nonnegative(),
@@ -28,6 +27,7 @@ export const runSummarySchema = z.object({
   sent: z.int().nonnegative(),
   ingested: z.int().nonnegative(),
   analyticsFailed: z.int().nonnegative(),
+  possibleDuplicates: z.int().nonnegative(),
 });
 export type RunSummary = z.infer<typeof runSummarySchema>;
 
@@ -51,6 +51,8 @@ export const streamEventSchema = z.discriminatedUnion("type", [
     type: z.literal("batch_sent"),
     lines: z.array(z.int().positive()),
     ingested: z.int().nonnegative(),
+    // Sent only when an earlier attempt may have stored this batch already.
+    possibleDuplicates: z.literal(true).optional(),
   }),
   z.object({
     type: z.literal("batch_failed"),

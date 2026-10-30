@@ -11,7 +11,10 @@ export interface Enricher {
 }
 
 export interface AnalyticsSink {
-  send(events: AnalyticsEvent[], signal?: AbortSignal): Promise<Result<AnalyticsResponse> & { attempts: number }>;
+  send(
+    events: AnalyticsEvent[],
+    signal?: AbortSignal,
+  ): Promise<Result<AnalyticsResponse> & { attempts: number; mayBeDuplicated?: boolean }>;
 }
 
 export interface PipelineDeps {
@@ -34,8 +37,8 @@ interface Enrichable {
 //
 // Enrichment works one group at a time because analytics is the bottleneck (one batch
 // every 10 s, against about 30 ms per enrichment call). Enriching further ahead wouldn't
-// shorten the run, and the group size already caps how many calls run at once. The cost:
-// a record that fails enrichment leaves its batch short rather than being replaced.
+// shorten the run, and the group size already caps how many calls a run makes at once.
+// The cost: a record that fails enrichment leaves its batch short rather than being replaced.
 //
 // A rejected API key stops the run at once: every remaining call would fail the same way,
 // and one clear error is more useful than a failure per record.
@@ -57,6 +60,7 @@ export async function runPipeline(
     sent: 0,
     ingested: 0,
     analyticsFailed: 0,
+    possibleDuplicates: 0,
   };
 
   const stopRun = (reason: string): undefined => {
@@ -98,9 +102,8 @@ export async function runPipeline(
     if (events.length === 0) continue;
 
     const result = await sink.send(events, signal);
-    if (signal.aborted) break;
-    if (!result.ok && result.fatal) return stopRun(result.reason);
 
+    // A stored batch is counted even if the client has just gone, so the logs stay accurate.
     if (result.ok) {
       const { itemsIngested } = result.value;
       summary.sent += events.length;
@@ -109,8 +112,21 @@ export async function runPipeline(
         // The response doesn't say which items were stored, so this can only be reported per batch.
         logger.warn({ sent: events.length, ingested: itemsIngested, lines }, "partial ingestion");
       }
+      if (result.mayBeDuplicated) {
+        summary.possibleDuplicates += events.length;
+        logger.warn({ lines, attempts: result.attempts }, "batch may have been stored twice");
+      }
       logger.info({ sent: events.length, ingested: itemsIngested, attempts: result.attempts }, "batch sent");
-      emit({ type: "batch_sent", lines, ingested: itemsIngested });
+      emit({
+        type: "batch_sent",
+        lines,
+        ingested: itemsIngested,
+        ...(result.mayBeDuplicated ? { possibleDuplicates: true as const } : {}),
+      });
+    } else if (signal.aborted) {
+      break;
+    } else if (result.fatal) {
+      return stopRun(result.reason);
     } else {
       summary.analyticsFailed += events.length;
       logger.error({ reason: result.reason, attempts: result.attempts, lines }, "batch failed");

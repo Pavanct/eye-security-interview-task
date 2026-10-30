@@ -83,6 +83,8 @@ Trying the real service confirmed this reading. A second request right after the
 
 The default interval is 10.5 seconds, not 10, so network jitter can't land a request just inside the previous window.
 
+A full run of the sample against the real service took about 8.9 minutes and stored all 996 valid records. 2 of the 50 batches needed a second attempt. The logs at that point didn't record why, so retries now log their reason.
+
 ### Consequences
 
 - **Easier:** batching follows directly, and it is the main performance approach.
@@ -166,7 +168,7 @@ The Enrichment Service has "intermittent issues", possibly unresolved. Analytics
 
 We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 attempts, with backoff starting at 200 ms and doubling, with full jitter, capped at 5 seconds. Analytics gets 3 attempts, paced by the rate limiter instead of a backoff. Timeouts are 5 seconds for enrichment and 10 seconds for analytics.
 
-**Changed during implementation:** enrichment first ran through a small helper that limited it to 5 calls at a time. It was removed. Analytics accepts one batch every 10 seconds and an enrichment call takes about 30 ms, so enrichment speed doesn't change how long a run takes. Records are now enriched one group of 20 at a time, which already caps the calls. The cost is that a failed record leaves its batch short rather than being replaced, and up to 20 calls can hit a flaky service at once. If analytics stopped being the bottleneck, bounded concurrency would be worth adding back.
+**Changed during implementation:** enrichment first ran through a small helper that limited it to 5 calls at a time. It was removed. Analytics accepts one batch every 10 seconds and an enrichment call takes about 30 ms, so enrichment speed doesn't change how long a run takes. Records are now enriched one group of 20 at a time, which already caps the calls. The cost is that a failed record leaves its batch short rather than being replaced, and each run can send up to 20 calls at once to a flaky service, so overlapping runs add up. A full run against the real service had no failed records with this setup. If analytics stopped being the bottleneck, bounded concurrency would be worth adding back.
 
 **Changed during implementation:** the plan was 3 enrichment attempts. In a small test against the real service, 7 of 30 calls returned a 500 (about 23%). At that rate 3 attempts would lose about 1% of records, and 5 attempts less than 0.1%. It's a small sample, so the number is configurable.
 
@@ -176,17 +178,18 @@ We chose **option 3**, with these defaults, all configurable. Enrichment gets 5 
 | Enrichment 400 | No retry, the record is marked failed |
 | 401 or 403 from either service (not in the spec, but the real service returns 401) | The whole run stops with a `run_failed` event, since no other record can succeed. Batches already sent stay stored |
 | Analytics 429 | Wait for `Retry-After`, then retry through the limiter |
-| Analytics 5xx, timeout or network error | Retry through the limiter, then the batch is marked failed |
+| Analytics 5xx, timeout or network error | Retry through the limiter. If a later attempt succeeds, the batch is flagged as a possible duplicate. If not, it is marked failed and "may already be stored". Either way the exit code is 1 |
 | Analytics 400 | No retry, the batch is marked failed |
-| Analytics 200 with `status: "error"` and nothing stored | Retry, since nothing can be duplicated |
+| Analytics 200 with nothing stored | Retry, since nothing can be duplicated |
 | Analytics 200 with partial `itemsIngested` | No retry, since it would duplicate items. Reported as a mismatch |
-| Analytics 200 with an invalid body | No retry, since the batch may be stored. The batch is marked failed |
+| Analytics 200 with `status: "error"` and items stored | No retry, the batch is marked failed and "may be partly stored" |
+| Analytics 200 with an invalid body, or more items than were sent | No retry, since the batch may be stored. The batch is marked failed, and the count is not added to the total |
 
 ### Consequences
 
 - **Easier:** runs survive brief failures, and the summary accounts for everything.
 - **Harder:** a long outage means slow failure, as every record exhausts its retries.
-- **Accepted risk:** the analytics response doesn't say which items failed in a partial ingestion, so the mismatch can only be reported per batch. Retrying a batch after a timeout could duplicate items if the first attempt actually succeeded.
+- **Accepted risk:** the analytics response doesn't say which items failed in a partial ingestion, so the mismatch can only be reported per batch. The Analytics API has no idempotency key, so retrying after an unclear failure can store a batch twice. We chose at-least-once delivery: for incident response a flagged duplicate is better than a lost event, and the user is always told. Rows flagged this way, or marked "run did not finish", also appear in the rejects file, so rerunning that file as it is can create duplicates. The reason on each row says so.
 
 ### Follow-ups
 

@@ -62,6 +62,7 @@ export async function runIngest(
     print(`Enrichment failed:   ${s.enrichmentFailed}`);
     print(`Analytics failed:    ${s.analyticsFailed}`);
     print(`Stored:              ${s.ingested}`);
+    print(`Possible duplicates: ${s.possibleDuplicates}`);
     print(`Repeated ids:        ${s.idConflicts}`);
   };
 

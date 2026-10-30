@@ -20,6 +20,7 @@ const summary = (overrides: object = {}) => ({
     sent: 2,
     ingested: 2,
     analyticsFailed: 0,
+    possibleDuplicates: 0,
     ...overrides,
   },
 });
@@ -161,6 +162,21 @@ describe("given rows with problems", () => {
     expect(exitCode).toBe(EXIT_INCOMPLETE);
     expect(output).toContain("only 1 of 2 in this batch were stored");
     expect(rejects?.match(/only 1 of 2/g)).toHaveLength(2);
+  });
+});
+
+describe("given a batch may have been stored twice", () => {
+  it("when the run finishes, then its rows are flagged and it doesn't exit 0", async () => {
+    const { exitCode, rejects, output } = await run([row(1), row(2)], async () =>
+      ndjson(
+        { type: "batch_sent", lines: [2, 3], ingested: 2, possibleDuplicates: true },
+        summary({ possibleDuplicates: 2 }),
+      ),
+    );
+
+    expect(exitCode).toBe(EXIT_INCOMPLETE);
+    expect(output).toMatch(/Possible duplicates:\s+2/);
+    expect(rejects?.match(/stored, but possibly twice/g)).toHaveLength(2);
   });
 });
 

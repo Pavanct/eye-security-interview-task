@@ -13,7 +13,6 @@ const envSchema = z.object({
   MAX_RECORDS_PER_REQUEST: positiveInt(5000),
   HEARTBEAT_INTERVAL_MS: positiveInt(5000),
 
-  ENRICHMENT_CONCURRENCY: positiveInt(5),
   ENRICHMENT_TIMEOUT_MS: positiveInt(5000),
   // Probing the real service showed about 23% of calls return a 500, so 3 attempts would
   // lose about 1% of records (0.23^3). With 5 it is under 0.1%.
@@ -37,7 +36,6 @@ export interface Config {
   heartbeatIntervalMs: number;
   upstream: { baseUrl: string; apiKey: string };
   enrichment: {
-    concurrency: number;
     timeoutMs: number;
     retry: { maxAttempts: number; baseDelayMs: number; maxDelayMs: number };
   };
@@ -61,7 +59,6 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
     heartbeatIntervalMs: e.HEARTBEAT_INTERVAL_MS,
     upstream: { baseUrl: e.UPSTREAM_BASE_URL, apiKey: e.UPSTREAM_API_KEY },
     enrichment: {
-      concurrency: e.ENRICHMENT_CONCURRENCY,
       timeoutMs: e.ENRICHMENT_TIMEOUT_MS,
       retry: {
         maxAttempts: e.ENRICHMENT_MAX_ATTEMPTS,

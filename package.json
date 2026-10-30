@@ -8,7 +8,7 @@
     "node": "^24 || >=26"
   },
   "scripts": {
-    "api": "tsx src/api/main.ts",
+    "api": "tsx --env-file-if-exists=.env src/api/main.ts",
     "cli": "tsx src/cli/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
